@@ -84,39 +84,116 @@ export function MonitorPage() {
   const [apiFilter, setApiFilter] = useState('');
   const [providerMap, setProviderMap] = useState<Record<string, string>>({});
   const [providerModels, setProviderModels] = useState<Record<string, Set<string>>>({});
+  const [providerTypeMap, setProviderTypeMap] = useState<Record<string, string>>({});
 
-  // 加载渠道名称映射（参照原始 Web UI 的映射方式）
+  // 加载渠道名称映射（支持所有提供商类型）
   const loadProviderMap = useCallback(async () => {
     try {
-      const providers = await providersApi.getOpenAIProviders();
       const map: Record<string, string> = {};
       const modelsMap: Record<string, Set<string>> = {};
-      providers.forEach((provider) => {
-        // 使用 X-Provider header 或 name 作为渠道名称
+      const typeMap: Record<string, string> = {};
+
+      // 并行加载所有提供商配置
+      const [openaiProviders, geminiKeys, claudeConfigs, codexConfigs, vertexConfigs] = await Promise.all([
+        providersApi.getOpenAIProviders().catch(() => []),
+        providersApi.getGeminiKeys().catch(() => []),
+        providersApi.getClaudeConfigs().catch(() => []),
+        providersApi.getCodexConfigs().catch(() => []),
+        providersApi.getVertexConfigs().catch(() => []),
+      ]);
+
+      // 处理 OpenAI 兼容提供商
+      openaiProviders.forEach((provider) => {
         const providerName = provider.headers?.['X-Provider'] || provider.name || 'unknown';
-        // 存储每个渠道的可用模型（使用 alias 和 name 作为标识）
         const modelSet = new Set<string>();
         (provider.models || []).forEach((m) => {
           if (m.alias) modelSet.add(m.alias);
           if (m.name) modelSet.add(m.name);
         });
-        // 遍历 api-key-entries，将每个 api-key 映射到 provider 名称和模型集合
         const apiKeyEntries = provider.apiKeyEntries || [];
         apiKeyEntries.forEach((entry) => {
           const apiKey = entry.apiKey;
           if (apiKey) {
             map[apiKey] = providerName;
             modelsMap[apiKey] = modelSet;
+            typeMap[apiKey] = 'OpenAI';
           }
         });
-        // 也用 name 作为 key（备用）
         if (provider.name) {
           map[provider.name] = providerName;
           modelsMap[provider.name] = modelSet;
+          typeMap[provider.name] = 'OpenAI';
         }
       });
+
+      // 处理 Gemini 提供商
+      geminiKeys.forEach((config) => {
+        const apiKey = config.apiKey;
+        if (apiKey) {
+          const providerName = config.prefix?.trim() || 'Gemini';
+          map[apiKey] = providerName;
+          typeMap[apiKey] = 'Gemini';
+        }
+      });
+
+      // 处理 Claude 提供商
+      claudeConfigs.forEach((config) => {
+        const apiKey = config.apiKey;
+        if (apiKey) {
+          const providerName = config.prefix?.trim() || 'Claude';
+          map[apiKey] = providerName;
+          typeMap[apiKey] = 'Claude';
+          // 存储模型集合
+          if (config.models && config.models.length > 0) {
+            const modelSet = new Set<string>();
+            config.models.forEach((m) => {
+              if (m.alias) modelSet.add(m.alias);
+              if (m.name) modelSet.add(m.name);
+            });
+            modelsMap[apiKey] = modelSet;
+          }
+        }
+      });
+
+      // 处理 Codex 提供商
+      codexConfigs.forEach((config) => {
+        const apiKey = config.apiKey;
+        if (apiKey) {
+          const providerName = config.prefix?.trim() || 'Codex';
+          map[apiKey] = providerName;
+          typeMap[apiKey] = 'Codex';
+          if (config.models && config.models.length > 0) {
+            const modelSet = new Set<string>();
+            config.models.forEach((m) => {
+              if (m.alias) modelSet.add(m.alias);
+              if (m.name) modelSet.add(m.name);
+            });
+            modelsMap[apiKey] = modelSet;
+          }
+        }
+      });
+
+      // 处理 Vertex 提供商
+      vertexConfigs.forEach((config) => {
+        const apiKey = config.apiKey;
+        if (apiKey) {
+          const providerName = config.prefix?.trim() || 'Vertex';
+          map[apiKey] = providerName;
+          typeMap[apiKey] = 'Vertex';
+          if (config.models && config.models.length > 0) {
+            const modelSet = new Set<string>();
+            config.models.forEach((m) => {
+              if (m.alias) modelSet.add(m.alias);
+              if (m.name) modelSet.add(m.name);
+            });
+            modelsMap[apiKey] = modelSet;
+          }
+        }
+      });
+
       setProviderMap(map);
       setProviderModels(modelsMap);
+      setProviderTypeMap(typeMap);
     } catch (err) {
       console.warn('Monitor: Failed to load provider map:', err);
     }
@@ -294,6 +371,7 @@ export function MonitorPage() {
         data={filteredData}
         loading={loading}
         providerMap={providerMap}
+        providerTypeMap={providerTypeMap}
         apiFilter={apiFilter}
       />
     </div>

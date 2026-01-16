@@ -6,6 +6,7 @@ import { usageApi } from '@/services/api';
 import { useDisableModel } from '@/hooks';
 import { TimeRangeSelector, formatTimeRangeCaption, type TimeRange } from './TimeRangeSelector';
 import { DisableModelModal } from './DisableModelModal';
+import { UnsupportedDisableModal } from './UnsupportedDisableModal';
 import {
   maskSecret,
   formatProviderDisplay,
@@ -21,6 +22,7 @@ interface RequestLogsProps {
   data: UsageData | null;
   loading: boolean;
   providerMap: Record<string, string>;
+  providerTypeMap: Record<string, string>;
   apiFilter: string;
 }
 
@@ -33,8 +35,8 @@ interface LogEntry {
   source: string;
   displayName: string;
   providerName: string | null;
+  providerType: string;
   maskedKey: string;
-  authIndex: string;
   failed: boolean;
   inputTokens: number;
   outputTokens: number;
@@ -56,12 +58,13 @@ interface PrecomputedStats {
 // 虚拟滚动行高
 const ROW_HEIGHT = 40;
 
-export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilter }: RequestLogsProps) {
+export function RequestLogs({ data, loading: parentLoading, providerMap, providerTypeMap, apiFilter }: RequestLogsProps) {
   const { t } = useTranslation();
   const [filterApi, setFilterApi] = useState('');
   const [filterModel, setFilterModel] = useState('');
   const [filterSource, setFilterSource] = useState('');
   const [filterStatus, setFilterStatus] = useState<'' | 'success' | 'failed'>('');
+  const [filterProviderType, setFilterProviderType] = useState('');
   const [autoRefresh, setAutoRefresh] = useState(10);
   const [countdown, setCountdown] = useState(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -92,12 +95,14 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
   // 使用禁用模型 Hook
   const {
     disableState,
+    unsupportedState,
     disabling,
     isModelDisabled,
     handleDisableClick,
     handleConfirmDisable,
     handleCancelDisable,
-  } = useDisableModel({ providerMap });
+    handleCloseUnsupported,
+  } = useDisableModel({ providerMap, providerTypeMap });
 
   // 处理时间范围变化
   const handleTimeRangeChange = useCallback((range: TimeRange, custom?: DateRange) => {
@@ -261,6 +266,8 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
           const { provider, masked } = getProviderDisplayParts(source, providerMap);
           const displayName = provider ? `${provider} (${masked})` : masked;
           const timestampMs = detail.timestamp ? new Date(detail.timestamp).getTime() : 0;
+          // 获取提供商类型
+          const providerType = providerTypeMap[source] || '--';
           entries.push({
             id: `${idCounter++}`,
             timestamp: detail.timestamp,
@@ -270,8 +277,8 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
             source,
             displayName,
             providerName: provider,
+            providerType,
             maskedKey: masked,
-            authIndex: detail.auth_index || '--',
             failed: detail.failed,
             inputTokens: detail.tokens.input_tokens || 0,
             outputTokens: detail.tokens.output_tokens || 0,
@@ -283,7 +290,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
 
     // 按时间倒序排序
     return entries.sort((a, b) => b.timestampMs - a.timestampMs);
-  }, [effectiveData, providerMap]);
+  }, [effectiveData, providerMap, providerTypeMap]);
 
   // 预计算所有条目的统计数据（一次性计算，避免渲染时重复计算）
   const precomputedStats = useMemo(() => {
@@ -339,21 +346,26 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
   }, [logEntries]);
 
   // 获取筛选选项
-  const { apis, models, sources } = useMemo(() => {
+  const { apis, models, sources, providerTypes } = useMemo(() => {
     const apiSet = new Set<string>();
     const modelSet = new Set<string>();
     const sourceSet = new Set<string>();
+    const providerTypeSet = new Set<string>();
 
     logEntries.forEach((entry) => {
       apiSet.add(entry.apiKey);
       modelSet.add(entry.model);
       sourceSet.add(entry.source);
+      if (entry.providerType && entry.providerType !== '--') {
+        providerTypeSet.add(entry.providerType);
+      }
     });
 
     return {
       apis: Array.from(apiSet).sort(),
       models: Array.from(modelSet).sort(),
       sources: Array.from(sourceSet).sort(),
+      providerTypes: Array.from(providerTypeSet).sort(),
     };
   }, [logEntries]);
 
@@ -365,9 +377,10 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
       if (filterSource && entry.source !== filterSource) return false;
       if (filterStatus === 'success' && entry.failed) return false;
       if (filterStatus === 'failed' && !entry.failed) return false;
+      if (filterProviderType && entry.providerType !== filterProviderType) return false;
       return true;
     });
-  }, [logEntries, filterApi, filterModel, filterSource, filterStatus]);
+  }, [logEntries, filterApi, filterModel, filterSource, filterStatus, filterProviderType]);
 
   // 虚拟滚动配置
   const rowVirtualizer = useVirtualizer({
@@ -399,10 +412,10 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
 
     return (
       <>
-        <td>{entry.authIndex}</td>
         <td title={entry.apiKey}>
           {maskSecret(entry.apiKey)}
         </td>
+        <td>{entry.providerType}</td>
         <td title={entry.model}>
           {entry.model}
         </td>
@@ -496,6 +509,16 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
           </select>
           <select
             className={styles.logSelect}
+            value={filterProviderType}
+            onChange={(e) => setFilterProviderType(e.target.value)}
+          >
+            <option value="">{t('monitor.logs.all_provider_types')}</option>
+            {providerTypes.map((type) => (
+              <option key={type} value={type}>{type}</option>
+            ))}
+          </select>
+          <select
+            className={styles.logSelect}
             value={filterModel}
             onChange={(e) => setFilterModel(e.target.value)}
           >
@@ -557,8 +580,8 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
                 <table className={`${styles.table} ${styles.virtualTable}`}>
                   <thead>
                     <tr>
-                      <th>{t('monitor.logs.header_auth')}</th>
                       <th>{t('monitor.logs.header_api')}</th>
+                      <th>{t('monitor.logs.header_request_type')}</th>
                       <th>{t('monitor.logs.header_model')}</th>
                       <th>{t('monitor.logs.header_source')}</th>
                       <th>{t('monitor.logs.header_status')}</th>
@@ -637,6 +660,12 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, apiFilt
         disabling={disabling}
         onConfirm={handleConfirmDisable}
         onCancel={handleCancelDisable}
+      />
+
+      {/* 不支持自动禁用提示弹窗 */}
+      <UnsupportedDisableModal
+        state={unsupportedState}
+        onClose={handleCloseUnsupported}
       />
     </>
   );

@@ -1024,6 +1024,7 @@
       "all_models": "All Models",
       "all_sources": "All Sources",
       "all_status": "All Status",
+      "all_provider_types": "All Providers",
       "success": "Success",
       "failed": "Failed",
       "last_update": "Last Update",
@@ -1037,6 +1038,7 @@
       "refreshing": "Refreshing...",
       "header_auth": "Auth Index",
       "header_api": "API",
+      "header_request_type": "Type",
       "header_model": "Model",
       "header_source": "Source",
       "header_status": "Status",
@@ -1063,7 +1065,15 @@
       "disable_error": "Disable failed",
       "disable_error_no_provider": "Cannot identify provider",
       "disable_error_provider_not_found": "Provider config not found: {{provider}}",
-      "disable_not_supported": "{{provider}} provider does not support disable operation"
+      "disable_not_supported": "{{provider}} provider does not support disable operation",
+      "disable_unsupported_title": "Auto-disable Not Supported",
+      "disable_unsupported_desc": "{{providerType}} type providers do not support auto-disable feature.",
+      "disable_unsupported_guide_title": "Manual Operation Guide",
+      "disable_unsupported_guide_step1": "1. Go to the \"AI Providers\" page",
+      "disable_unsupported_guide_step2": "2. Find the corresponding {{providerType}} configuration",
+      "disable_unsupported_guide_step3": "3. Edit the config and remove model \"{{model}}\"",
+      "disable_unsupported_guide_step4": "4. Save the configuration to apply changes",
+      "disable_unsupported_close": "Got it"
     }
   }
 }
