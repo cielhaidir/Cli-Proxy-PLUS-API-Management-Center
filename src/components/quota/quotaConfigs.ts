@@ -17,8 +17,7 @@ import type {
   GeminiCliParsedBucket,
   GeminiCliQuotaBucketState,
   GeminiCliQuotaState,
-  GithubCopilotQuotaState,
-  GithubCopilotTokenPayload
+  GithubCopilotQuotaState
 } from '@/types';
 import { apiCallApi, authFilesApi, getApiCallErrorMessage } from '@/services/api';
 import {
@@ -621,24 +620,6 @@ const renderGithubCopilotItems = (
       t('github_copilot_quota.no_data')
     );
   }
-
-  const formatTimestamp = (timestamp: number): string => {
-    try {
-      const date = new Date(timestamp * 1000);
-      return date.toLocaleString();
-    } catch {
-      return '-';
-    }
-  };
-
-  const formatDuration = (seconds: number): string => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) {
-      return t('github_copilot_quota.duration_hours', { hours, minutes });
-    }
-    return t('github_copilot_quota.duration_minutes', { minutes });
-  };
 
   const getPlanLabel = (skuValue?: string | null): string => {
     if (!skuValue) return t('github_copilot_quota.plan_unknown');
