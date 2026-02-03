@@ -1,5 +1,5 @@
 /**
- * Quota management page - coordinates the three quota sections.
+ * Quota management page - coordinates the four quota sections.
  */
 
 import { useCallback, useEffect, useState } from 'react';
@@ -12,6 +12,7 @@ import {
   ANTIGRAVITY_CONFIG,
   CODEX_CONFIG,
   GEMINI_CLI_CONFIG,
+  KIRO_CONFIG,
   GITHUB_COPILOT_CONFIG
 } from '@/components/quota';
 import type { AuthFileItem } from '@/types';
@@ -72,6 +73,12 @@ export function QuotaPage() {
 
       <QuotaSection
         config={ANTIGRAVITY_CONFIG}
+        files={files}
+        loading={loading}
+        disabled={disableControls}
+      />
+      <QuotaSection
+        config={KIRO_CONFIG}
         files={files}
         loading={loading}
         disabled={disableControls}
