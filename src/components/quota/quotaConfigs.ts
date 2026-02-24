@@ -23,9 +23,9 @@ import type {
   GeminiCliQuotaBucketState,
   GeminiCliQuotaState,
   KiroQuotaState,
-  GithubCopilotQuotaState,
   KiroBaseQuota,
   KiroFreeTrialQuota,
+  GithubCopilotQuotaState,
 } from '@/types';
 import { apiCallApi, authFilesApi, getApiCallErrorMessage } from '@/services/api';
 import {
@@ -40,9 +40,10 @@ import {
   GEMINI_CLI_REQUEST_HEADERS,
   KIRO_QUOTA_URL,
   KIRO_REQUEST_HEADERS,
+  KIRO_REQUEST_BODY,
   GITHUB_COPILOT_USAGE_URL,
   GITHUB_COPILOT_REQUEST_HEADERS,
-  KIRO_REQUEST_BODY,
+  // normalizeAuthIndex,
   normalizeGeminiCliModelId,
   normalizeNumberValue,
   normalizePlanType,
@@ -53,8 +54,8 @@ import {
   parseCodexUsagePayload,
   parseGeminiCliQuotaPayload,
   parseKiroQuotaPayload,
-  parseGithubCopilotTokenPayload,
   parseKiroErrorPayload,
+  parseGithubCopilotTokenPayload,
   resolveCodexChatgptAccountId,
   resolveCodexPlanType,
   resolveGeminiCliProjectId,
@@ -515,7 +516,7 @@ const fetchGithubCopilotQuota = async (
   sku: string | null;
 }> => {
   const rawAuthIndex = file['auth_index'] ?? file.authIndex;
-  const authIndex = normalizeAuthIndexValue(rawAuthIndex);
+  const authIndex = normalizeAuthIndex(rawAuthIndex);
   if (!authIndex) {
     throw new Error(t('github_copilot_quota.missing_auth_index'));
   }
@@ -524,10 +525,9 @@ const fetchGithubCopilotQuota = async (
     authIndex,
     method: 'GET',
     url: GITHUB_COPILOT_USAGE_URL,
-    header: { ...GITHUB_COPILOT_REQUEST_HEADERS }
+    header: { ...GITHUB_COPILOT_REQUEST_HEADERS },
   });
 
-  // console.log('Github Copilot quota API result:', result);
   if (result.statusCode < 200 || result.statusCode >= 300) {
     throw createStatusError(getApiCallErrorMessage(result), result.statusCode);
   }
@@ -539,7 +539,7 @@ const fetchGithubCopilotQuota = async (
 
   const expiresAt = normalizeNumberValue(payload.expires_at ?? payload.expiresAt);
   const refreshIn = normalizeNumberValue(payload.refresh_in ?? payload.refreshIn);
-  
+
   // Extract quota snapshots (new structure)
   const quotaSnapshots = payload.quota_snapshots ?? payload.quotaSnapshots;
   let chatQuota: number | null = null;
@@ -551,14 +551,13 @@ const fetchGithubCopilotQuota = async (
   let premiumQuota: number | null = null;
   let premiumPercent: number | null = null;
   let premiumEntitlement: number | null = null;
-  
+
   if (quotaSnapshots && typeof quotaSnapshots === 'object') {
-    // Try to get from quota_snapshots first
     const snapshots = quotaSnapshots as Record<string, unknown>;
     const chatSnapshot = snapshots.chat;
     const completionsSnapshot = snapshots.completions;
     const premiumSnapshot = snapshots.premium_interactions ?? snapshots.premiumInteractions;
-    
+
     if (chatSnapshot && typeof chatSnapshot === 'object') {
       const chatSnapshotObj = chatSnapshot as Record<string, unknown>;
       chatQuota = normalizeNumberValue(
@@ -572,7 +571,7 @@ const fetchGithubCopilotQuota = async (
       );
       chatUnlimited = Boolean(chatSnapshotObj.unlimited);
     }
-    
+
     if (completionsSnapshot && typeof completionsSnapshot === 'object') {
       const completionsSnapshotObj = completionsSnapshot as Record<string, unknown>;
       completionsQuota = normalizeNumberValue(
@@ -586,7 +585,7 @@ const fetchGithubCopilotQuota = async (
       );
       completionsUnlimited = Boolean(completionsSnapshotObj.unlimited);
     }
-    
+
     if (premiumSnapshot && typeof premiumSnapshot === 'object') {
       const premiumSnapshotObj = premiumSnapshot as Record<string, unknown>;
       premiumQuota = normalizeNumberValue(
@@ -603,7 +602,7 @@ const fetchGithubCopilotQuota = async (
       );
     }
   }
-  
+
   // Fallback to legacy limited_user_quotas if quota_snapshots not available
   if (chatQuota === null || completionsQuota === null) {
     const quotas = payload.limited_user_quotas ?? payload.limitedUserQuotas;
@@ -616,7 +615,7 @@ const fetchGithubCopilotQuota = async (
       }
     }
   }
-  
+
   // Extract reset date (prefer quota_reset_date for enterprise, fallback to limited_user_reset_date)
   let quotaResetDate: number | null = null;
   const quotaResetDateStr = normalizeStringValue(
@@ -625,9 +624,8 @@ const fetchGithubCopilotQuota = async (
   const limitedResetDate = normalizeNumberValue(
     payload.limited_user_reset_date ?? payload.limitedUserResetDate
   );
-  
+
   if (quotaResetDateStr) {
-    // Parse ISO 8601 date string to Unix timestamp
     const parsedDate = new Date(quotaResetDateStr);
     if (!isNaN(parsedDate.getTime())) {
       quotaResetDate = Math.floor(parsedDate.getTime() / 1000);
@@ -635,7 +633,7 @@ const fetchGithubCopilotQuota = async (
   } else if (limitedResetDate !== null) {
     quotaResetDate = limitedResetDate;
   }
-  
+
   const sku = normalizeStringValue(
     payload.sku ??
       payload.access_type_sku ??
@@ -666,7 +664,7 @@ const fetchGithubCopilotQuota = async (
     premiumPercent,
     premiumEntitlement,
     quotaResetDate,
-    sku
+    sku,
   };
 };
 
@@ -831,165 +829,6 @@ const renderGeminiCliItems = (
   });
 };
 
-const renderGithubCopilotItems = (
-  quota: GithubCopilotQuotaState,
-  t: TFunction,
-  helpers: QuotaRenderHelpers
-): ReactNode => {
-  const { styles: styleMap, QuotaProgressBar } = helpers;
-  const { createElement: h, Fragment } = React;
-
-  const {
-    expiresAt,
-    refreshIn,
-    chatQuota,
-    chatPercent,
-    chatUnlimited,
-    completionsQuota,
-    completionsPercent,
-    completionsUnlimited,
-    premiumQuota,
-    premiumPercent,
-    premiumEntitlement,
-    quotaResetDate,
-    sku
-  } = quota;
-
-  // Check if we have any data to display
-  const hasData =
-    expiresAt !== null ||
-    refreshIn !== null ||
-    chatQuota !== null ||
-    completionsQuota !== null ||
-    premiumQuota !== null ||
-    quotaResetDate !== null ||
-    sku !== null;
-
-  if (!hasData) {
-    return h(
-      'div',
-      { className: styleMap.quotaMessage },
-      t('github_copilot_quota.no_data')
-    );
-  }
-
-  const getPlanLabel = (skuValue?: string | null): string => {
-    if (!skuValue) return t('github_copilot_quota.plan_unknown');
-    const normalized = skuValue.toLowerCase();
-    if (normalized.includes('enterprise')) return t('github_copilot_quota.plan_enterprise');
-    if (normalized.includes('business') || normalized.includes('team')) {
-      return t('github_copilot_quota.plan_business');
-    }
-    if (normalized.includes('individual') || normalized.includes('personal') || normalized.includes('pro')) {
-      return t('github_copilot_quota.plan_individual');
-    }
-    if (normalized.includes('free') || normalized.includes('trial')) {
-      return t('github_copilot_quota.plan_free_limited');
-    }
-    return skuValue;
-  };
-
-  const nodes: ReactNode[] = [];
-
-  // Display SKU/Plan badge if available
-  if (sku) {
-    nodes.push(
-      h(
-        'div',
-        { key: 'plan', className: styleMap.codexPlan },
-        h('span', { className: styleMap.codexPlanLabel }, t('github_copilot_quota.plan_label')),
-        h('span', { className: styleMap.codexPlanValue }, getPlanLabel(sku))
-      )
-    );
-  }
-
-  const resetLabel = quotaResetDate !== null
-    ? new Date(quotaResetDate * 1000).toLocaleString(undefined, {
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit'
-      })
-    : '-';
-
-  // Display Chat Quota with limit and progress bar
-  if (chatQuota !== null || chatUnlimited) {
-    const percent = chatUnlimited ? 100 : (chatPercent !== null ? Math.round(chatPercent) : null);
-    const percentLabel = chatUnlimited ? 'Unlimited' : (percent !== null ? `${percent}%` : '--');
-    
-    nodes.push(
-      h(
-        'div',
-        { key: 'chat-quota', className: styleMap.quotaRow },
-        h(
-          'div',
-          { className: styleMap.quotaRowHeader },
-          h('span', { className: styleMap.quotaModel }, t('github_copilot_quota.chat_quota')),
-          h(
-            'div',
-            { className: styleMap.quotaMeta },
-            h('span', { className: styleMap.quotaPercent }, percentLabel),
-            h('span', { className: styleMap.quotaReset }, resetLabel)
-          )
-        ),
-        h(QuotaProgressBar, { percent, highThreshold: 60, mediumThreshold: 20 })
-      )
-    );
-  }
-
-  // Display Completions Quota with limit and progress bar
-  if (completionsQuota !== null || completionsUnlimited) {
-    const percent = completionsUnlimited ? 100 : (completionsPercent !== null ? Math.round(completionsPercent) : null);
-    const percentLabel = completionsUnlimited ? 'Unlimited' : (percent !== null ? `${percent}%` : '--');
-    
-    nodes.push(
-      h(
-        'div',
-        { key: 'completions-quota', className: styleMap.quotaRow },
-        h(
-          'div',
-          { className: styleMap.quotaRowHeader },
-          h('span', { className: styleMap.quotaModel }, t('github_copilot_quota.completions_quota')),
-          h(
-            'div',
-            { className: styleMap.quotaMeta },
-            h('span', { className: styleMap.quotaPercent }, percentLabel),
-            h('span', { className: styleMap.quotaReset }, resetLabel)
-          )
-        ),
-        h(QuotaProgressBar, { percent, highThreshold: 60, mediumThreshold: 20 })
-      )
-    );
-  }
-
-  // Display Premium Interactions Quota (only if entitlement > 0)
-  if (premiumEntitlement !== null && premiumEntitlement > 0 && premiumQuota !== null) {
-    const percent = premiumPercent !== null ? Math.round(premiumPercent) : null;
-    const percentLabel = percent !== null ? `${percent}%` : '--';
-    
-    nodes.push(
-      h(
-        'div',
-        { key: 'premium-quota', className: styleMap.quotaRow },
-        h(
-          'div',
-          { className: styleMap.quotaRowHeader },
-          h('span', { className: styleMap.quotaModel }, t('github_copilot_quota.premium_quota')),
-          h(
-            'div',
-            { className: styleMap.quotaMeta },
-            h('span', { className: styleMap.quotaPercent }, percentLabel),
-            h('span', { className: styleMap.quotaReset }, resetLabel)
-          )
-        ),
-        h(QuotaProgressBar, { percent, highThreshold: 60, mediumThreshold: 20 })
-      )
-    );
-  }
-
-  return h(Fragment, null, ...nodes);
-};
-
 const buildClaudeQuotaWindows = (
   payload: ClaudeUsagePayload,
   t: TFunction
@@ -1100,6 +939,160 @@ const renderClaudeItems = (
       );
     })
   );
+
+  return h(Fragment, null, ...nodes);
+};
+
+const renderGithubCopilotItems = (
+  quota: GithubCopilotQuotaState,
+  t: TFunction,
+  helpers: QuotaRenderHelpers
+): ReactNode => {
+  const { styles: styleMap, QuotaProgressBar } = helpers;
+  const { createElement: h, Fragment } = React;
+
+  const {
+    expiresAt,
+    refreshIn,
+    chatQuota,
+    chatPercent,
+    chatUnlimited,
+    completionsQuota,
+    completionsPercent,
+    completionsUnlimited,
+    premiumQuota,
+    premiumPercent,
+    premiumEntitlement,
+    quotaResetDate,
+    sku,
+  } = quota;
+
+  const hasData =
+    expiresAt !== null ||
+    refreshIn !== null ||
+    chatQuota !== null ||
+    completionsQuota !== null ||
+    premiumQuota !== null ||
+    quotaResetDate !== null ||
+    sku !== null;
+
+  if (!hasData) {
+    return h(
+      'div',
+      { className: styleMap.quotaMessage },
+      t('github_copilot_quota.no_data')
+    );
+  }
+
+  const getPlanLabel = (skuValue?: string | null): string => {
+    if (!skuValue) return t('github_copilot_quota.plan_unknown');
+    const normalized = skuValue.toLowerCase();
+    if (normalized.includes('enterprise')) return t('github_copilot_quota.plan_enterprise');
+    if (normalized.includes('business') || normalized.includes('team')) {
+      return t('github_copilot_quota.plan_business');
+    }
+    if (normalized.includes('individual') || normalized.includes('personal') || normalized.includes('pro')) {
+      return t('github_copilot_quota.plan_individual');
+    }
+    if (normalized.includes('free') || normalized.includes('trial')) {
+      return t('github_copilot_quota.plan_free_limited');
+    }
+    return skuValue;
+  };
+
+  const nodes: ReactNode[] = [];
+
+  if (sku) {
+    nodes.push(
+      h(
+        'div',
+        { key: 'plan', className: styleMap.codexPlan },
+        h('span', { className: styleMap.codexPlanLabel }, t('github_copilot_quota.plan_label')),
+        h('span', { className: styleMap.codexPlanValue }, getPlanLabel(sku))
+      )
+    );
+  }
+
+  const resetLabel = quotaResetDate !== null
+    ? new Date(quotaResetDate * 1000).toLocaleString(undefined, {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      })
+    : '-';
+
+  if (chatQuota !== null || chatUnlimited) {
+    const percent = chatUnlimited ? 100 : (chatPercent !== null ? Math.round(chatPercent) : null);
+    const percentLabel = chatUnlimited ? 'Unlimited' : (percent !== null ? `${percent}%` : '--');
+
+    nodes.push(
+      h(
+        'div',
+        { key: 'chat-quota', className: styleMap.quotaRow },
+        h(
+          'div',
+          { className: styleMap.quotaRowHeader },
+          h('span', { className: styleMap.quotaModel }, t('github_copilot_quota.chat_quota')),
+          h(
+            'div',
+            { className: styleMap.quotaMeta },
+            h('span', { className: styleMap.quotaPercent }, percentLabel),
+            h('span', { className: styleMap.quotaReset }, resetLabel)
+          )
+        ),
+        h(QuotaProgressBar, { percent, highThreshold: 60, mediumThreshold: 20 })
+      )
+    );
+  }
+
+  if (completionsQuota !== null || completionsUnlimited) {
+    const percent = completionsUnlimited ? 100 : (completionsPercent !== null ? Math.round(completionsPercent) : null);
+    const percentLabel = completionsUnlimited ? 'Unlimited' : (percent !== null ? `${percent}%` : '--');
+
+    nodes.push(
+      h(
+        'div',
+        { key: 'completions-quota', className: styleMap.quotaRow },
+        h(
+          'div',
+          { className: styleMap.quotaRowHeader },
+          h('span', { className: styleMap.quotaModel }, t('github_copilot_quota.completions_quota')),
+          h(
+            'div',
+            { className: styleMap.quotaMeta },
+            h('span', { className: styleMap.quotaPercent }, percentLabel),
+            h('span', { className: styleMap.quotaReset }, resetLabel)
+          )
+        ),
+        h(QuotaProgressBar, { percent, highThreshold: 60, mediumThreshold: 20 })
+      )
+    );
+  }
+
+  if (premiumEntitlement !== null && premiumEntitlement > 0 && premiumQuota !== null) {
+    const percent = premiumPercent !== null ? Math.round(premiumPercent) : null;
+    const percentLabel = percent !== null ? `${percent}%` : '--';
+
+    nodes.push(
+      h(
+        'div',
+        { key: 'premium-quota', className: styleMap.quotaRow },
+        h(
+          'div',
+          { className: styleMap.quotaRowHeader },
+          h('span', { className: styleMap.quotaModel }, t('github_copilot_quota.premium_quota')),
+          h(
+            'div',
+            { className: styleMap.quotaMeta },
+            h('span', { className: styleMap.quotaPercent }, percentLabel),
+            h('span', { className: styleMap.quotaReset }, resetLabel)
+          )
+        ),
+        h(QuotaProgressBar, { percent, highThreshold: 60, mediumThreshold: 20 })
+      )
+    );
+  }
 
   return h(Fragment, null, ...nodes);
 };
@@ -1249,7 +1242,6 @@ const fetchKiroQuota = async (
   });
 
   if (result.statusCode < 200 || result.statusCode >= 300) {
-    // Try to parse error response for specific error messages
     const errorPayload = parseKiroErrorPayload(result.body ?? result.bodyText);
     if (errorPayload?.reason === 'TEMPORARILY_SUSPENDED') {
       throw createStatusError(t('kiro_quota.suspended'), result.statusCode);
@@ -1308,7 +1300,6 @@ const renderKiroItems = (
 
   const nodes: ReactNode[] = [];
 
-  // Subscription title
   if (quota.subscriptionTitle) {
     nodes.push(
       h(
@@ -1320,7 +1311,6 @@ const renderKiroItems = (
     );
   }
 
-  // Base quota
   if (quota.baseQuota) {
     const { used, limit, resetTime } = quota.baseQuota;
     const remaining = Math.max(0, limit - used);
@@ -1348,7 +1338,6 @@ const renderKiroItems = (
     );
   }
 
-  // Free trial quota
   if (quota.freeTrialQuota) {
     const { used, limit, expiry, status } = quota.freeTrialQuota;
     const remaining = Math.max(0, limit - used);
@@ -1461,7 +1450,7 @@ export const GITHUB_COPILOT_CONFIG: QuotaConfig<
     premiumPercent: null,
     premiumEntitlement: null,
     quotaResetDate: null,
-    sku: null
+    sku: null,
   }),
   buildSuccessState: (data) => ({
     status: 'success',
@@ -1477,7 +1466,7 @@ export const GITHUB_COPILOT_CONFIG: QuotaConfig<
     premiumPercent: data.premiumPercent,
     premiumEntitlement: data.premiumEntitlement,
     quotaResetDate: data.quotaResetDate,
-    sku: data.sku
+    sku: data.sku,
   }),
   buildErrorState: (message, status) => ({
     status: 'error',
@@ -1495,92 +1484,11 @@ export const GITHUB_COPILOT_CONFIG: QuotaConfig<
     quotaResetDate: null,
     sku: null,
     error: message,
-    errorStatus: status
+    errorStatus: status,
   }),
   cardClassName: styles.githubCopilotCard,
   controlsClassName: styles.githubCopilotControls,
   controlClassName: styles.githubCopilotControl,
   gridClassName: styles.githubCopilotGrid,
-  renderQuotaItems: renderGithubCopilotItems
-};
-
-export const GITHUB_COPILOT_CONFIG: QuotaConfig<
-  GithubCopilotQuotaState,
-  {
-    expiresAt: number | null;
-    refreshIn: number | null;
-    chatQuota: number | null;
-    chatPercent: number | null;
-    chatUnlimited: boolean;
-    completionsQuota: number | null;
-    completionsPercent: number | null;
-    completionsUnlimited: boolean;
-    premiumQuota: number | null;
-    premiumPercent: number | null;
-    premiumEntitlement: number | null;
-    quotaResetDate: number | null;
-    sku: string | null;
-  }
-> = {
-  type: 'github-copilot',
-  i18nPrefix: 'github_copilot_quota',
-  filterFn: (file) => isGithubCopilotFile(file),
-  fetchQuota: fetchGithubCopilotQuota,
-  storeSelector: (state) => state.githubCopilotQuota,
-  storeSetter: 'setGithubCopilotQuota',
-  buildLoadingState: () => ({
-    status: 'loading',
-    expiresAt: null,
-    refreshIn: null,
-    chatQuota: null,
-    chatPercent: null,
-    chatUnlimited: false,
-    completionsQuota: null,
-    completionsPercent: null,
-    completionsUnlimited: false,
-    premiumQuota: null,
-    premiumPercent: null,
-    premiumEntitlement: null,
-    quotaResetDate: null,
-    sku: null
-  }),
-  buildSuccessState: (data) => ({
-    status: 'success',
-    expiresAt: data.expiresAt,
-    refreshIn: data.refreshIn,
-    chatQuota: data.chatQuota,
-    chatPercent: data.chatPercent,
-    chatUnlimited: data.chatUnlimited,
-    completionsQuota: data.completionsQuota,
-    completionsPercent: data.completionsPercent,
-    completionsUnlimited: data.completionsUnlimited,
-    premiumQuota: data.premiumQuota,
-    premiumPercent: data.premiumPercent,
-    premiumEntitlement: data.premiumEntitlement,
-    quotaResetDate: data.quotaResetDate,
-    sku: data.sku
-  }),
-  buildErrorState: (message, status) => ({
-    status: 'error',
-    expiresAt: null,
-    refreshIn: null,
-    chatQuota: null,
-    chatPercent: null,
-    chatUnlimited: false,
-    completionsQuota: null,
-    completionsPercent: null,
-    completionsUnlimited: false,
-    premiumQuota: null,
-    premiumPercent: null,
-    premiumEntitlement: null,
-    quotaResetDate: null,
-    sku: null,
-    error: message,
-    errorStatus: status
-  }),
-  cardClassName: styles.githubCopilotCard,
-  controlsClassName: styles.githubCopilotControls,
-  controlClassName: styles.githubCopilotControl,
-  gridClassName: styles.githubCopilotGrid,
-  renderQuotaItems: renderGithubCopilotItems
+  renderQuotaItems: renderGithubCopilotItems,
 };
