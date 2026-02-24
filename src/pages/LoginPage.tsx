@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/Input';
 import { IconEye, IconEyeOff } from '@/components/ui/icons';
 import { useAuthStore, useLanguageStore, useNotificationStore } from '@/stores';
 import { detectApiBaseFromLocation, normalizeApiBase } from '@/utils/connection';
+import { LANGUAGE_LABEL_KEYS, LANGUAGE_ORDER } from '@/utils/constants';
+import { isSupportedLanguage } from '@/utils/language';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
 import type { ApiError } from '@/types';
 import styles from './LoginPage.module.scss';
@@ -13,11 +15,20 @@ import styles from './LoginPage.module.scss';
 /**
  * 将 API 错误转换为本地化的用户友好消息
  */
-function getLocalizedErrorMessage(error: any, t: (key: string) => string): string {
-  const apiError = error as ApiError;
-  const status = apiError?.status;
-  const code = apiError?.code;
-  const message = apiError?.message || '';
+type RedirectState = { from?: { pathname?: string } };
+
+function getLocalizedErrorMessage(error: unknown, t: (key: string) => string): string {
+  const apiError = error as Partial<ApiError>;
+  const status = typeof apiError.status === 'number' ? apiError.status : undefined;
+  const code = typeof apiError.code === 'string' ? apiError.code : undefined;
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof apiError.message === 'string'
+        ? apiError.message
+        : typeof error === 'string'
+          ? error
+          : '';
 
   // 根据 HTTP 状态码判断
   if (status === 401) {
@@ -59,7 +70,7 @@ export function LoginPage() {
   const location = useLocation();
   const { showNotification } = useNotificationStore();
   const language = useLanguageStore((state) => state.language);
-  const toggleLanguage = useLanguageStore((state) => state.toggleLanguage);
+  const setLanguage = useLanguageStore((state) => state.setLanguage);
   const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
   const login = useAuthStore((state) => state.login);
   const restoreSession = useAuthStore((state) => state.restoreSession);
@@ -78,7 +89,16 @@ export function LoginPage() {
   const [error, setError] = useState('');
 
   const detectedBase = useMemo(() => detectApiBaseFromLocation(), []);
-  const nextLanguageLabel = language === 'zh-CN' ? t('language.english') : t('language.chinese');
+  const handleLanguageChange = useCallback(
+    (event: React.ChangeEvent<HTMLSelectElement>) => {
+      const selectedLanguage = event.target.value;
+      if (!isSupportedLanguage(selectedLanguage)) {
+        return;
+      }
+      setLanguage(selectedLanguage);
+    },
+    [setLanguage]
+  );
 
   useEffect(() => {
     const init = async () => {
@@ -88,7 +108,7 @@ export function LoginPage() {
           setAutoLoginSuccess(true);
           // 延迟跳转，让用户看到成功动画
           setTimeout(() => {
-            const redirect = (location.state as any)?.from?.pathname || '/';
+            const redirect = (location.state as RedirectState | null)?.from?.pathname || '/';
             navigate(redirect, { replace: true });
           }, 1500);
         } else {
@@ -124,7 +144,7 @@ export function LoginPage() {
       });
       showNotification(t('common.connected_status'), 'success');
       navigate('/', { replace: true });
-    } catch (err: any) {
+    } catch (err: unknown) {
       const message = getLocalizedErrorMessage(err, t);
       setError(message);
       showNotification(`${t('notification.login_failed')}: ${message}`, 'error');
@@ -144,7 +164,7 @@ export function LoginPage() {
   );
 
   if (isAuthenticated && !autoLoading && !autoLoginSuccess) {
-    const redirect = (location.state as any)?.from?.pathname || '/';
+    const redirect = (location.state as RedirectState | null)?.from?.pathname || '/';
     return <Navigate to={redirect} replace />;
   }
 
@@ -168,8 +188,8 @@ export function LoginPage() {
           /* 启动动画 */
           <div className={styles.splashContent}>
             <img src={INLINE_LOGO_JPEG} alt="CPAMC" className={styles.splashLogo} />
-            <h1 className={styles.splashTitle}>CLI Proxy API</h1>
-            <p className={styles.splashSubtitle}>Management Center</p>
+            <h1 className={styles.splashTitle}>{t('splash.title')}</h1>
+            <p className={styles.splashSubtitle}>{t('splash.subtitle')}</p>
             <div className={styles.splashLoader}>
               <div className={styles.splashLoaderBar} />
             </div>
@@ -185,17 +205,19 @@ export function LoginPage() {
               <div className={styles.loginHeader}>
                 <div className={styles.titleRow}>
                   <div className={styles.title}>{t('title.login')}</div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className={styles.languageBtn}
-                    onClick={toggleLanguage}
+                  <select
+                    className={styles.languageSelect}
+                    value={language}
+                    onChange={handleLanguageChange}
                     title={t('language.switch')}
                     aria-label={t('language.switch')}
                   >
-                    {nextLanguageLabel}
-                  </Button>
+                    {LANGUAGE_ORDER.map((lang) => (
+                      <option key={lang} value={lang}>
+                        {t(LANGUAGE_LABEL_KEYS[lang])}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div className={styles.subtitle}>{t('login.subtitle')}</div>
               </div>

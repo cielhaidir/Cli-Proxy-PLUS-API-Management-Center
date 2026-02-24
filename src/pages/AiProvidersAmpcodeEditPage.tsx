@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { ampcodeApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
@@ -23,6 +24,23 @@ const getErrorMessage = (err: unknown) => {
   if (typeof err === 'string') return err;
   return '';
 };
+
+const normalizeMappingEntries = (entries: Array<{ name: string; alias: string }>) =>
+  (entries ?? []).reduce<Array<{ from: string; to: string }>>((acc, entry) => {
+    const from = String(entry?.name ?? '').trim();
+    const to = String(entry?.alias ?? '').trim();
+    if (!from && !to) return acc;
+    acc.push({ from, to });
+    return acc;
+  }, []);
+
+const buildAmpcodeSignature = (form: AmpcodeFormState) =>
+  JSON.stringify({
+    upstreamUrl: String(form.upstreamUrl ?? '').trim(),
+    upstreamApiKey: String(form.upstreamApiKey ?? '').trim(),
+    forceModelMappings: Boolean(form.forceModelMappings),
+    modelMappings: normalizeMappingEntries(form.mappingEntries),
+  });
 
 export function AiProvidersAmpcodeEditPage() {
   const { t } = useTranslation();
@@ -42,6 +60,9 @@ export function AiProvidersAmpcodeEditPage() {
   const [mappingsDirty, setMappingsDirty] = useState(false);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [baselineSignature, setBaselineSignature] = useState(() =>
+    buildAmpcodeSignature(buildAmpcodeFormState(null))
+  );
   const initializedRef = useRef(false);
   const mountedRef = useRef(false);
 
@@ -83,7 +104,9 @@ export function AiProvidersAmpcodeEditPage() {
     setLoaded(false);
     setMappingsDirty(false);
     setError('');
-    setForm(buildAmpcodeFormState(useConfigStore.getState().config?.ampcode ?? null));
+    const initialForm = buildAmpcodeFormState(useConfigStore.getState().config?.ampcode ?? null);
+    setForm(initialForm);
+    setBaselineSignature(buildAmpcodeSignature(initialForm));
 
     void (async () => {
       try {
@@ -93,7 +116,9 @@ export function AiProvidersAmpcodeEditPage() {
         setLoaded(true);
         updateConfigValue('ampcode', ampcode);
         clearCache('ampcode');
-        setForm(buildAmpcodeFormState(ampcode));
+        const nextForm = buildAmpcodeFormState(ampcode);
+        setForm(nextForm);
+        setBaselineSignature(buildAmpcodeSignature(nextForm));
       } catch (err: unknown) {
         if (!mountedRef.current) return;
         setError(getErrorMessage(err) || t('notification.refresh_failed'));
@@ -104,6 +129,23 @@ export function AiProvidersAmpcodeEditPage() {
       }
     })();
   }, [clearCache, t, updateConfigValue]);
+
+  const currentSignature = useMemo(() => buildAmpcodeSignature(form), [form]);
+  const isDirty = baselineSignature !== currentSignature;
+  const canGuard = !loading && !saving;
+
+  const { allowNextNavigation } = useUnsavedChangesGuard({
+    enabled: canGuard,
+    shouldBlock: ({ currentLocation, nextLocation }) =>
+      isDirty && currentLocation.pathname !== nextLocation.pathname,
+    dialog: {
+      title: t('common.unsaved_changes_title'),
+      message: t('common.unsaved_changes_message'),
+      confirmText: t('common.leave'),
+      cancelText: t('common.stay'),
+      variant: 'danger',
+    },
+  });
 
   const clearAmpcodeUpstreamApiKey = async () => {
     showConfirmation({
@@ -192,6 +234,8 @@ export function AiProvidersAmpcodeEditPage() {
       updateConfigValue('ampcode', next);
       clearCache('ampcode');
       showNotification(t('notification.ampcode_updated'), 'success');
+      allowNextNavigation();
+      setBaselineSignature(buildAmpcodeSignature(form));
       handleBack();
     } catch (err: unknown) {
       const message = getErrorMessage(err);
@@ -227,10 +271,28 @@ export function AiProvidersAmpcodeEditPage() {
       onBack={handleBack}
       backLabel={t('common.back')}
       backAriaLabel={t('common.back')}
-      rightAction={
-        <Button size="sm" onClick={() => void saveAmpcode()} loading={saving} disabled={!canSave}>
-          {t('common.save')}
-        </Button>
+      hideTopBarBackButton
+      hideTopBarRightAction
+      floatingAction={
+        <div className={layoutStyles.floatingActions}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleBack}
+            className={layoutStyles.floatingBackButton}
+          >
+            {t('common.back')}
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => void saveAmpcode()}
+            loading={saving}
+            disabled={!canSave}
+            className={layoutStyles.floatingSaveButton}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
       }
       isLoading={loading}
       loadingLabel={t('common.loading')}
@@ -254,17 +316,8 @@ export function AiProvidersAmpcodeEditPage() {
           disabled={loading || saving || disableControls}
           hint={t('ai_providers.ampcode_upstream_api_key_hint')}
         />
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            marginTop: -8,
-            marginBottom: 12,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div className="hint" style={{ margin: 0 }}>
+        <div className={layoutStyles.upstreamApiKeyRow}>
+          <div className={layoutStyles.upstreamApiKeyHint}>
             {t('ai_providers.ampcode_upstream_api_key_current', {
               key: config?.ampcode?.upstreamApiKey
                 ? maskApiKey(config.ampcode.upstreamApiKey)
@@ -302,6 +355,8 @@ export function AiProvidersAmpcodeEditPage() {
             addLabel={t('ai_providers.ampcode_model_mappings_add_btn')}
             namePlaceholder={t('ai_providers.ampcode_model_mappings_from_placeholder')}
             aliasPlaceholder={t('ai_providers.ampcode_model_mappings_to_placeholder')}
+            removeButtonTitle={t('common.delete')}
+            removeButtonAriaLabel={t('common.delete')}
             disabled={loading || saving || disableControls}
           />
           <div className="hint">{t('ai_providers.ampcode_model_mappings_hint')}</div>

@@ -5,6 +5,7 @@
   display: flex;
   flex-direction: column;
   gap: $spacing-lg;
+  padding-bottom: calc(var(--auth-files-action-bar-height, 0px) + 16px + env(safe-area-inset-bottom));
 }
 
 .pageHeader {
@@ -56,7 +57,7 @@
 
 .errorBox {
   padding: $spacing-md;
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: rgba($error-color, 0.1);
   border: 1px solid var(--danger-color);
   border-radius: $radius-md;
   color: var(--danger-color);
@@ -80,12 +81,13 @@
 
 .filterTag {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
   padding: 6px 14px;
   border-radius: 20px;
   font-size: 13px;
   font-weight: 500;
+  line-height: 1;
   border: 1px solid transparent;
   cursor: pointer;
   transition: all $transition-fast;
@@ -101,12 +103,19 @@
 }
 
 .filterTagLabel {
+  display: inline-flex;
+  align-items: baseline;
   white-space: nowrap;
 }
 
 .filterTagCount {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  min-width: 2ch;
   font-size: 12px;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
   opacity: 0.85;
 }
 
@@ -173,6 +182,18 @@
 .fileGrid {
   display: grid;
   gap: $spacing-md;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+
+  @include tablet {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.fileGridQuotaManaged {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 
   @include tablet {
@@ -301,6 +322,10 @@
   background-image: linear-gradient(180deg, rgba(231, 239, 255, 0.2), rgba(231, 239, 255, 0));
 }
 
+.kiroCard {
+  background-image: linear-gradient(180deg, rgba(255, 248, 225, 0.18), rgba(255, 248, 225, 0));
+}
+
 .quotaSection {
   display: flex;
   flex-direction: column;
@@ -362,11 +387,11 @@
 }
 
 .quotaBarFillMedium {
-  background-color: var(--warning-color, #f59e0b);
+  background-color: var(--warning-color);
 }
 
 .quotaBarFillLow {
-  background-color: var(--danger-color, #ef4444);
+  background-color: var(--danger-color);
 }
 
 .quotaMeta {
@@ -402,10 +427,28 @@
   padding: $spacing-sm 0;
 }
 
+.quotaMessageAction {
+  width: 100%;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-decoration: underline;
+
+  &:hover:not(:disabled) {
+    color: var(--text-primary);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    text-decoration: none;
+  }
+}
+
 .quotaError {
   font-size: 12px;
   color: var(--danger-color);
-  background-color: rgba(239, 68, 68, 0.08);
+  background-color: rgba($error-color, 0.08);
   border: 1px solid var(--danger-color);
   border-radius: $radius-sm;
   padding: $spacing-xs $spacing-sm;
@@ -413,9 +456,9 @@
 
 .quotaWarning {
   font-size: 12px;
-  color: var(--warning-color, #f59e0b);
-  background-color: rgba(245, 158, 11, 0.12);
-  border: 1px solid var(--warning-color, #f59e0b);
+  color: var(--warning-text);
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
   border-radius: $radius-sm;
   padding: $spacing-xs $spacing-sm;
 }
@@ -459,6 +502,15 @@
   }
 }
 
+.fileCardSelected {
+  border-color: var(--primary-color);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary-color) 70%, transparent);
+
+  &:hover {
+    border-color: var(--primary-color);
+  }
+}
+
 .fileCardDisabled {
   opacity: 0.6;
 
@@ -469,11 +521,64 @@
   }
 }
 
+.fileCardLayout {
+  display: flex;
+  align-items: stretch;
+  gap: $spacing-md;
+}
+
+.fileCardMain {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+  flex: 1;
+  min-width: 0;
+}
+
 .cardHeader {
   display: flex;
   align-items: center;
   gap: $spacing-sm;
   min-height: 28px;
+}
+
+.selectionToggle {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  flex-shrink: 0;
+  border-radius: 7px;
+  border: 1px solid var(--border-color);
+  background: color-mix(in srgb, var(--bg-secondary) 92%, transparent);
+  color: var(--primary-contrast, #fff);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition:
+    border-color $transition-fast,
+    background-color $transition-fast,
+    box-shadow $transition-fast,
+    transform $transition-fast;
+
+  &:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary-color) 16%, transparent);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.selectionToggleActive {
+  border-color: var(--primary-color);
+  background: var(--primary-color);
+}
+
+.selectionToggleActive svg {
+  display: block;
+  stroke-width: 2.4;
 }
 
 .typeBadge {
@@ -502,6 +607,16 @@
   padding: $spacing-xs 0;
   border-top: 1px solid var(--border-color);
   border-bottom: 1px solid var(--border-color);
+}
+
+.healthStatusMessage {
+  font-size: 12px;
+  color: var(--warning-text);
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: $radius-sm;
+  padding: 5px 8px;
+  word-break: break-word;
 }
 
 .cardStats {
@@ -534,9 +649,9 @@
 }
 
 .statFailure {
-  background-color: var(--failure-badge-bg, #fee2e2);
-  color: var(--failure-badge-text, #991b1b);
-  border-color: var(--failure-badge-border, #fca5a5);
+  background-color: var(--failure-badge-bg);
+  color: var(--failure-badge-text);
+  border-color: var(--failure-badge-border);
 }
 
 // 状态监测栏
@@ -553,37 +668,119 @@
   gap: 2px;
   flex: 1;
   min-width: 180px;
+  position: relative;
+}
+
+.statusBlockWrapper {
+  flex: 1;
+  min-width: 6px;
+  position: relative;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .statusBlock {
-  flex: 1;
+  width: 100%;
   height: 8px;
   border-radius: 2px;
-  min-width: 6px;
-  transition:
-    transform 0.15s ease,
-    opacity 0.15s ease;
+  transition: transform 0.15s ease, opacity 0.15s ease;
 
-  &:hover {
-    transform: scaleY(1.5);
-    opacity: 0.85;
+  .statusBlockWrapper:hover &,
+  .statusBlockWrapper.statusBlockActive & {
+    transform: scaleY(1.8);
+    opacity: 0.9;
   }
-}
-
-.statusBlockSuccess {
-  background-color: var(--success-color, #22c55e);
-}
-
-.statusBlockFailure {
-  background-color: var(--danger-color, #ef4444);
-}
-
-.statusBlockMixed {
-  background-color: var(--warning-color, #f59e0b);
 }
 
 .statusBlockIdle {
   background-color: var(--border-secondary, #e5e7eb);
+}
+
+.statusTooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: $z-dropdown;
+  pointer-events: none;
+  color: var(--text-primary);
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--bg-primary, #fff);
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--border-secondary, #e5e7eb);
+  }
+}
+
+.statusTooltipLeft {
+  left: 0;
+  transform: translateX(0);
+
+  &::after,
+  &::before {
+    left: 8px;
+    transform: none;
+  }
+}
+
+.statusTooltipRight {
+  left: auto;
+  right: 0;
+  transform: translateX(0);
+
+  &::after,
+  &::before {
+    left: auto;
+    right: 8px;
+    transform: none;
+  }
+}
+
+.tooltipTime {
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.tooltipStats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tooltipSuccess {
+  color: var(--success-color, #22c55e);
+}
+
+.tooltipFailure {
+  color: var(--danger-color, #ef4444);
+}
+
+.tooltipRate {
+  color: var(--text-secondary);
+  margin-left: 2px;
 }
 
 .statusRate {
@@ -609,8 +806,19 @@
 }
 
 .statusRateLow {
-  color: var(--failure-badge-text, #991b1b);
-  background: var(--failure-badge-bg, #fee2e2);
+  color: var(--failure-badge-text);
+  background: var(--failure-badge-bg);
+}
+
+@include mobile {
+  .statusTooltip {
+    font-size: 12px;
+    padding: 8px 12px;
+  }
+
+  .statusBlocks {
+    min-width: 140px;
+  }
 }
 
 .prefixProxyEditor {
@@ -635,7 +843,7 @@
   padding: $spacing-sm $spacing-md;
   border-radius: $radius-md;
   border: 1px solid var(--danger-color);
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: rgba($error-color, 0.1);
   color: var(--danger-color);
   font-size: 12px;
 }
@@ -733,6 +941,66 @@
   border-top: 1px solid var(--border-color);
 }
 
+.batchActionContainer {
+  position: fixed;
+  left: var(--content-center-x, 50%);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 50;
+  width: min(960px, calc(100vw - 24px));
+  will-change: transform, opacity;
+}
+
+.batchActionBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  padding: 10px 12px;
+  border-radius: $radius-lg;
+  border: 1px solid color-mix(in srgb, var(--border-color) 70%, transparent);
+  background: color-mix(in srgb, var(--bg-primary) 84%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: var(--shadow-lg);
+}
+
+.batchActionLeft,
+.batchActionRight {
+  display: flex;
+  align-items: center;
+  gap: $spacing-xs;
+  flex-wrap: wrap;
+}
+
+.batchActionRight {
+  justify-content: flex-end;
+}
+
+.batchSelectionText {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-right: 2px;
+}
+
+@include mobile {
+  .batchActionContainer {
+    width: calc(100vw - 16px);
+    bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+
+  .batchActionBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .batchActionLeft,
+  .batchActionRight {
+    justify-content: center;
+  }
+}
+
 .pageInfo {
   font-size: 13px;
   color: var(--text-secondary);
@@ -741,7 +1009,7 @@
   border-radius: $radius-md;
 }
 
-// OAuth 排除列表
+// OAuth 模型禁用
 .excludedList {
   display: flex;
   flex-direction: column;
@@ -789,7 +1057,7 @@
   flex-shrink: 0;
 }
 
-// OAuth 排除列表表单：提供商快捷标签
+// OAuth 模型禁用表单：提供商快捷标签
 .providerField {
   display: flex;
   flex-direction: column;
@@ -841,6 +1109,49 @@
     border-color: var(--primary-color);
     color: #fff;
   }
+}
+
+// OAuth 模型别名 - 映射概览
+.aliasChartSection {
+  margin-bottom: $spacing-lg;
+  padding-bottom: $spacing-lg;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.aliasChartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-sm;
+}
+
+.aliasChartTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.aliasChart {
+  width: 100%;
+  min-height: 120px;
+}
+
+.cardExtraButtons {
+  display: flex;
+  gap: $spacing-sm;
+  align-items: center;
+}
+
+.viewModeSwitch {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-xs;
+  padding: 2px;
+  border-radius: $radius-md;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
 }
 
 // OAuth 模型映射表单
@@ -1002,7 +1313,7 @@
 .modelExcludedBadge {
   font-size: 10px;
   color: var(--danger-color);
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: rgba($error-color, 0.1);
   padding: 2px 6px;
   border-radius: 8px;
   border: 1px solid var(--danger-color);

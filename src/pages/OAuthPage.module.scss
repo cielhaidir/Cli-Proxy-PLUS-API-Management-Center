@@ -28,6 +28,35 @@
   gap: $spacing-xl;
 }
 
+.cardContent {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-md;
+
+  :global(.form-group) {
+    margin-bottom: 0;
+  }
+
+  :global(.status-badge) {
+    margin-bottom: 0;
+    align-self: flex-start;
+  }
+}
+
+.cardHint {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.cardHintSecondary {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-tertiary);
+}
+
 .oauthSection {
   display: flex;
   flex-direction: column;
@@ -61,21 +90,21 @@
   }
 
   &.error {
-    background-color: rgba(239, 68, 68, 0.1);
-    color: #dc2626;
+    background-color: rgba($error-color, 0.12);
+    color: $error-color;
   }
 
   &.waiting {
-    background-color: rgba(59, 130, 246, 0.1);
-    color: #3b82f6;
+    background-color: rgba($primary-color, 0.12);
+    color: var(--primary-color);
   }
 }
 
 .callbackSection {
-  margin-top: $spacing-md;
+  margin-top: 0;
   display: flex;
   flex-direction: column;
-  gap: $spacing-xs;
+  gap: $spacing-sm;
 }
 
 .callbackActions {
@@ -117,9 +146,29 @@
 
 .geminiProjectField {
   :global(.form-group) {
-    margin-top: $spacing-sm;
+    margin-top: 0;
+    margin-bottom: 0;
     gap: $spacing-sm;
   }
+
+  :global(.input:disabled) {
+    background-color: var(--bg-tertiary);
+    border-color: var(--border-color);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+  }
+}
+
+.formItem {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-xs;
+}
+
+.formItemLabel {
+  margin: 0;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 .filePicker {
@@ -142,4 +191,50 @@
 
 .fileNamePlaceholder {
   color: var(--text-secondary);
+}
+
+.connectionBox {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  padding: $spacing-md;
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.connectionLabel {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.keyValueList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.keyValueItem {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 10px;
+  align-items: start;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
+
+.keyValueKey {
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.keyValueValue {
+  color: var(--text-primary);
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }

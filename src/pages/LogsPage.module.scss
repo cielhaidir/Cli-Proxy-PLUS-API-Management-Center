@@ -121,6 +121,96 @@
   max-width: 420px;
 }
 
+.structuredFilters {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 100%;
+  padding: 8px 10px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+}
+
+.filterChipGroup {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.filterChipLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 700;
+  line-height: 28px;
+  min-width: 68px;
+}
+
+.filterChipList {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  flex: 1;
+}
+
+.filterChip {
+  @include button-reset;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: $radius-full;
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.3;
+  cursor: pointer;
+  max-width: 280px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background-color 0.15s ease;
+
+  &:hover:not(:disabled) {
+    color: var(--text-primary);
+    border-color: var(--primary-color);
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.filterChipActive {
+  color: var(--primary-color);
+  border-color: rgba($primary-color, 0.45);
+  background: rgba($primary-color, 0.14);
+}
+
+.filterChipHint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
+
+@include mobile {
+  .filterChipGroup {
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .filterChipLabel {
+    min-width: 0;
+    line-height: 1.2;
+  }
+}
+
 .searchInput {
   padding-right: 44px !important;
 }
@@ -308,7 +398,7 @@
   color: var(--text-primary);
 
   &:hover {
-    background: rgba(59, 130, 246, 0.06);
+    background: rgba($primary-color, 0.06);
   }
 
   @include tablet {
@@ -409,14 +499,14 @@
 
 .statusInfo {
   color: var(--info-color);
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.25);
+  background: rgba($primary-color, 0.12);
+  border-color: rgba($primary-color, 0.25);
 }
 
 .statusWarn {
-  color: var(--warning-color);
-  background: rgba(245, 158, 11, 0.14);
-  border-color: rgba(245, 158, 11, 0.25);
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
 }
 
 .statusError {
@@ -427,20 +517,20 @@
 
 .levelInfo {
   color: var(--info-color);
-  background: rgba(59, 130, 246, 0.12);
-  border-color: rgba(59, 130, 246, 0.25);
+  background: rgba($primary-color, 0.12);
+  border-color: rgba($primary-color, 0.25);
 }
 
 .levelWarn {
-  color: var(--warning-color);
-  background: rgba(245, 158, 11, 0.14);
-  border-color: rgba(245, 158, 11, 0.25);
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border-color: var(--warning-border);
 }
 
 .levelError {
   color: var(--error-color);
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.25);
+  background: rgba($error-color, 0.12);
+  border-color: rgba($error-color, 0.25);
 }
 
 .levelDebug,
@@ -452,8 +542,8 @@
 
 .methodBadge {
   color: var(--text-primary);
-  background: rgba(59, 130, 246, 0.08);
-  border-color: rgba(59, 130, 246, 0.22);
+  background: rgba($primary-color, 0.08);
+  border-color: rgba($primary-color, 0.22);
 }
 
 .path {
@@ -474,6 +564,159 @@
 
   @include mobile {
     flex-basis: 100%;
+  }
+}
+
+.traceButton {
+  @include button-reset;
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: $radius-full;
+  border: 1px solid rgba($primary-color, 0.3);
+  background: rgba($primary-color, 0.1);
+  color: var(--primary-color);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+
+  &:hover {
+    background: rgba($primary-color, 0.16);
+    border-color: rgba($primary-color, 0.45);
+  }
+}
+
+.tracePanel {
+  display: flex;
+  flex-direction: column;
+  gap: $spacing-sm;
+}
+
+.traceNotice {
+  padding: 8px 10px;
+  border-radius: $radius-md;
+  border: 1px solid var(--warning-border);
+  background: var(--warning-bg);
+  color: var(--warning-text);
+  font-size: 12px;
+}
+
+.traceSectionTitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.traceCandidatesHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.traceInfoGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  @include mobile {
+    grid-template-columns: 1fr;
+  }
+}
+
+.traceInfoItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background: var(--bg-secondary);
+}
+
+.traceInfoItemWide {
+  grid-column: 1 / -1;
+}
+
+.traceInfoLabel {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 700;
+}
+
+.traceInfoValue {
+  font-size: 12px;
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.traceSourceType {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: $radius-full;
+  border: 1px solid var(--border-color);
+  font-size: 11px;
+  color: var(--text-secondary);
+  background: var(--bg-primary);
+}
+
+.traceCandidates {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.traceCandidate {
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  padding: 10px;
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.traceCandidateHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.traceModelBadge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: $radius-full;
+  border: 1px solid var(--success-badge-border, #6ee7b7);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--success-badge-text, #065f46);
+  background: var(--success-badge-bg, #d1fae5);
+}
+
+.traceDelta {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.traceCandidateGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+
+  @include mobile {
+    grid-template-columns: 1fr;
   }
 }
 

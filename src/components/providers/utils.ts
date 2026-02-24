@@ -23,11 +23,13 @@ export const withoutDisableAllModelsRule = (models?: string[]) => {
   return base;
 };
 
-export const parseExcludedModels = (text: string): string[] =>
+export const parseTextList = (text: string): string[] =>
   text
     .split(/[\n,]+/)
     .map((item) => item.trim())
     .filter(Boolean);
+
+export const parseExcludedModels = parseTextList;
 
 export const excludedModelsToText = (models?: string[]) =>
   Array.isArray(models) ? models.join('\n') : '';
@@ -35,6 +37,19 @@ export const excludedModelsToText = (models?: string[]) =>
 export const normalizeOpenAIBaseUrl = (baseUrl: string): string => {
   let trimmed = String(baseUrl || '').trim();
   if (!trimmed) return '';
+  trimmed = trimmed.replace(/\/?v0\/management\/?$/i, '');
+  trimmed = trimmed.replace(/\/+$/g, '');
+  if (!/^https?:\/\//i.test(trimmed)) {
+    trimmed = `http://${trimmed}`;
+  }
+  return trimmed;
+};
+
+export const normalizeClaudeBaseUrl = (baseUrl: string): string => {
+  let trimmed = String(baseUrl || '').trim();
+  if (!trimmed) {
+    return 'https://api.anthropic.com';
+  }
   trimmed = trimmed.replace(/\/?v0\/management\/?$/i, '');
   trimmed = trimmed.replace(/\/+$/g, '');
   if (!/^https?:\/\//i.test(trimmed)) {
@@ -56,6 +71,18 @@ export const buildOpenAIChatCompletionsEndpoint = (baseUrl: string): string => {
     return trimmed;
   }
   return `${trimmed}/chat/completions`;
+};
+
+export const buildClaudeMessagesEndpoint = (baseUrl: string): string => {
+  const trimmed = normalizeClaudeBaseUrl(baseUrl);
+  if (!trimmed) return '';
+  if (trimmed.endsWith('/v1/messages')) {
+    return trimmed;
+  }
+  if (trimmed.endsWith('/v1')) {
+    return `${trimmed}/messages`;
+  }
+  return `${trimmed}/v1/messages`;
 };
 
 // 根据 source (apiKey) 获取统计数据 - 与旧版逻辑一致

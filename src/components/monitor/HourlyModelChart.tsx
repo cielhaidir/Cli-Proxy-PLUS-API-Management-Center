@@ -185,18 +185,24 @@ export function HourlyModelChart({ data, loading, isDark }: HourlyModelChartProp
             size: 11,
           },
           generateLabels: (chart: any) => {
-            return chart.data.datasets.map((dataset: any, i: number) => {
-              const isLine = dataset.type === 'line';
-              return {
-                text: dataset.label,
-                fillStyle: dataset.backgroundColor,
-                strokeStyle: dataset.borderColor,
-                lineWidth: 0,
-                hidden: !chart.isDatasetVisible(i),
-                datasetIndex: i,
-                pointStyle: isLine ? 'circle' : 'rect',
-              };
-            });
+            return chart.data.datasets
+              .map((dataset: any, i: number) => {
+                const isLine = dataset.type === 'line';
+                // 柱状图数据全为0时不显示标签
+                if (!isLine && Array.isArray(dataset.data) && dataset.data.every((v: number) => v === 0)) {
+                  return null;
+                }
+                return {
+                  text: dataset.label,
+                  fillStyle: dataset.backgroundColor,
+                  strokeStyle: dataset.borderColor,
+                  lineWidth: 0,
+                  hidden: !chart.isDatasetVisible(i),
+                  datasetIndex: i,
+                  pointStyle: isLine ? 'circle' : 'rect',
+                };
+              })
+              .filter(Boolean);
           },
         },
       },
@@ -207,6 +213,10 @@ export function HourlyModelChart({ data, loading, isDark }: HourlyModelChartProp
         borderColor: isDark ? '#4b5563' : '#e5e7eb',
         borderWidth: 1,
         padding: 12,
+        filter: (tooltipItem: any) => {
+          // 值为0的模型不在tooltip中显示
+          return tooltipItem.raw !== 0;
+        },
       },
     },
     scales: {

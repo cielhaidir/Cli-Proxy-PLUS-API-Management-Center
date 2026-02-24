@@ -8,11 +8,12 @@ import { HeaderInputList } from '@/components/ui/HeaderInputList';
 import { ModelInputList } from '@/components/ui/ModelInputList';
 import { modelsToEntries } from '@/components/ui/modelInputListUtils';
 import { useEdgeSwipeBack } from '@/hooks/useEdgeSwipeBack';
+import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { SecondaryScreenShell } from '@/components/common/SecondaryScreenShell';
 import { providersApi } from '@/services/api';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import type { ProviderKeyConfig } from '@/types';
-import { buildHeaderObject, headersToEntries } from '@/utils/headers';
+import { buildHeaderObject, headersToEntries, normalizeHeaderEntries } from '@/utils/headers';
 import type { VertexFormState } from '@/components/providers';
 import layoutStyles from './AiProvidersEditLayout.module.scss';
 
@@ -34,6 +35,27 @@ const parseIndexParam = (value: string | undefined) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const normalizeModelEntries = (entries: Array<{ name: string; alias: string }>) =>
+  (entries ?? []).reduce<Array<{ name: string; alias: string }>>((acc, entry) => {
+    const name = String(entry?.name ?? '').trim();
+    const alias = String(entry?.alias ?? '').trim();
+    if (!name && !alias) return acc;
+    acc.push({ name, alias });
+    return acc;
+  }, []);
+
+const buildVertexSignature = (form: VertexFormState) =>
+  JSON.stringify({
+    apiKey: String(form.apiKey ?? '').trim(),
+    priority:
+      form.priority !== undefined && Number.isFinite(form.priority) ? Math.trunc(form.priority) : null,
+    prefix: String(form.prefix ?? '').trim(),
+    baseUrl: String(form.baseUrl ?? '').trim(),
+    proxyUrl: String(form.proxyUrl ?? '').trim(),
+    headers: normalizeHeaderEntries(form.headers),
+    models: normalizeModelEntries(form.modelEntries),
+  });
+
 export function AiProvidersVertexEditPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -53,6 +75,7 @@ export function AiProvidersVertexEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [form, setForm] = useState<VertexFormState>(() => buildEmptyForm());
+  const [baselineSignature, setBaselineSignature] = useState(() => buildVertexSignature(buildEmptyForm()));
 
   const hasIndexParam = typeof params.index === 'string';
   const editIndex = useMemo(() => parseIndexParam(params.index), [params.index]);
@@ -126,17 +149,38 @@ export function AiProvidersVertexEditPage() {
     if (loading) return;
 
     if (initialData) {
-      setForm({
+      const nextForm: VertexFormState = {
         ...initialData,
         headers: headersToEntries(initialData.headers),
         modelEntries: modelsToEntries(initialData.models),
-      });
+      };
+      setForm(nextForm);
+      setBaselineSignature(buildVertexSignature(nextForm));
       return;
     }
-    setForm(buildEmptyForm());
+    const nextForm = buildEmptyForm();
+    setForm(nextForm);
+    setBaselineSignature(buildVertexSignature(nextForm));
   }, [initialData, loading]);
 
   const canSave = !disableControls && !saving && !loading && !invalidIndexParam && !invalidIndex;
+
+  const currentSignature = useMemo(() => buildVertexSignature(form), [form]);
+  const isDirty = baselineSignature !== currentSignature;
+  const canGuard = !loading && !saving && !invalidIndexParam && !invalidIndex;
+
+  const { allowNextNavigation } = useUnsavedChangesGuard({
+    enabled: canGuard,
+    shouldBlock: ({ currentLocation, nextLocation }) =>
+      isDirty && currentLocation.pathname !== nextLocation.pathname,
+    dialog: {
+      title: t('common.unsaved_changes_title'),
+      message: t('common.unsaved_changes_message'),
+      confirmText: t('common.leave'),
+      cancelText: t('common.stay'),
+      variant: 'danger',
+    },
+  });
 
   const handleSave = useCallback(async () => {
     if (!canSave) return;
@@ -153,6 +197,10 @@ export function AiProvidersVertexEditPage() {
     try {
       const payload: ProviderKeyConfig = {
         apiKey: form.apiKey.trim(),
+        priority:
+          form.priority !== undefined && Number.isFinite(form.priority)
+            ? Math.trunc(form.priority)
+            : undefined,
         prefix: form.prefix?.trim() || undefined,
         baseUrl,
         proxyUrl: form.proxyUrl?.trim() || undefined,
@@ -179,6 +227,8 @@ export function AiProvidersVertexEditPage() {
         editIndex !== null ? t('notification.vertex_config_updated') : t('notification.vertex_config_added'),
         'success'
       );
+      allowNextNavigation();
+      setBaselineSignature(buildVertexSignature(form));
       handleBack();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : '';
@@ -188,6 +238,7 @@ export function AiProvidersVertexEditPage() {
       setSaving(false);
     }
   }, [
+    allowNextNavigation,
     canSave,
     clearCache,
     configs,
@@ -207,10 +258,28 @@ export function AiProvidersVertexEditPage() {
       onBack={handleBack}
       backLabel={t('common.back')}
       backAriaLabel={t('common.back')}
-      rightAction={
-        <Button size="sm" onClick={handleSave} loading={saving} disabled={!canSave}>
-          {t('common.save')}
-        </Button>
+      hideTopBarBackButton
+      hideTopBarRightAction
+      floatingAction={
+        <div className={layoutStyles.floatingActions}>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleBack}
+            className={layoutStyles.floatingBackButton}
+          >
+            {t('common.back')}
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            loading={saving}
+            disabled={!canSave}
+            className={layoutStyles.floatingSaveButton}
+          >
+            {t('common.save')}
+          </Button>
+        </div>
       }
       isLoading={loading}
       loadingLabel={t('common.loading')}
@@ -218,7 +287,7 @@ export function AiProvidersVertexEditPage() {
       <Card>
         {error && <div className="error-box">{error}</div>}
         {invalidIndexParam || invalidIndex ? (
-          <div className="hint">Invalid provider index.</div>
+          <div className="hint">{t('common.invalid_provider_index')}</div>
         ) : (
           <>
             <Input
@@ -256,6 +325,8 @@ export function AiProvidersVertexEditPage() {
               addLabel={t('common.custom_headers_add')}
               keyPlaceholder={t('common.custom_headers_key_placeholder')}
               valuePlaceholder={t('common.custom_headers_value_placeholder')}
+              removeButtonTitle={t('common.delete')}
+              removeButtonAriaLabel={t('common.delete')}
               disabled={disableControls || saving}
             />
             <div className="form-group">
@@ -266,6 +337,8 @@ export function AiProvidersVertexEditPage() {
                 addLabel={t('ai_providers.vertex_models_add_btn')}
                 namePlaceholder={t('common.model_name_placeholder')}
                 aliasPlaceholder={t('common.model_alias_placeholder')}
+                removeButtonTitle={t('common.delete')}
+                removeButtonAriaLabel={t('common.delete')}
                 disabled={disableControls || saving}
               />
               <div className="hint">{t('ai_providers.vertex_models_hint')}</div>

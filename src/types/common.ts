@@ -4,7 +4,7 @@
 
 export type Theme = 'light' | 'dark' | 'auto';
 
-export type Language = 'zh-CN' | 'en';
+export type Language = 'zh-CN' | 'en' | 'ru';
 
 export type NotificationType = 'info' | 'success' | 'warning' | 'error';
 
@@ -15,7 +15,7 @@ export interface Notification {
   duration?: number;
 }
 
-export interface ApiResponse<T = any> {
+export interface ApiResponse<T = unknown> {
   data?: T;
   error?: string;
   message?: string;

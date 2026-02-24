@@ -62,14 +62,23 @@ export function DashboardPage() {
     apiKeysCache.current = [];
   }, [apiBase, config?.apiKeys]);
 
-  const normalizeApiKeyList = (input: any): string[] => {
+  const normalizeApiKeyList = (input: unknown): string[] => {
     if (!Array.isArray(input)) return [];
     const seen = new Set<string>();
     const keys: string[] = [];
 
     input.forEach((item) => {
-      const value = typeof item === 'string' ? item : item?.['api-key'] ?? item?.apiKey ?? '';
-      const trimmed = String(value || '').trim();
+      const record =
+        item !== null && typeof item === 'object' && !Array.isArray(item)
+          ? (item as Record<string, unknown>)
+          : null;
+      const value =
+        typeof item === 'string'
+          ? item
+          : record
+            ? (record['api-key'] ?? record['apiKey'] ?? record.key ?? record.Key)
+            : '';
+      const trimmed = String(value ?? '').trim();
       if (!trimmed || seen.has(trimmed)) return;
       seen.add(trimmed);
       keys.push(trimmed);
@@ -172,12 +181,12 @@ export function DashboardPage() {
 
   const quickStats: QuickStat[] = [
     {
-      label: t('nav.api_keys'),
+      label: t('dashboard.management_keys'),
       value: stats.apiKeys ?? '-',
       icon: <IconKey size={24} />,
-      path: '/api-keys',
+      path: '/config',
       loading: loading && stats.apiKeys === null,
-      sublabel: t('dashboard.management_keys')
+      sublabel: t('nav.config_management')
     },
     {
       label: t('nav.ai_providers'),
@@ -211,6 +220,22 @@ export function DashboardPage() {
       sublabel: t('dashboard.available_models_desc')
     }
   ];
+
+  const routingStrategyRaw = config?.routingStrategy?.trim() || '';
+  const routingStrategyDisplay = !routingStrategyRaw
+    ? '-'
+    : routingStrategyRaw === 'round-robin'
+      ? t('basic_settings.routing_strategy_round_robin')
+      : routingStrategyRaw === 'fill-first'
+        ? t('basic_settings.routing_strategy_fill_first')
+        : routingStrategyRaw;
+  const routingStrategyBadgeClass = !routingStrategyRaw
+    ? styles.configBadgeUnknown
+    : routingStrategyRaw === 'round-robin'
+      ? styles.configBadgeRoundRobin
+      : routingStrategyRaw === 'fill-first'
+        ? styles.configBadgeFillFirst
+        : styles.configBadgeUnknown;
 
   return (
     <div className={styles.dashboard}>
@@ -302,6 +327,12 @@ export function DashboardPage() {
                 {config.wsAuth ? t('common.yes') : t('common.no')}
               </span>
             </div>
+            <div className={styles.configItem}>
+              <span className={styles.configLabel}>{t('dashboard.routing_strategy')}</span>
+              <span className={`${styles.configBadge} ${routingStrategyBadgeClass}`}>
+                {routingStrategyDisplay}
+              </span>
+            </div>
             {config.proxyUrl && (
               <div className={`${styles.configItem} ${styles.configItemFull}`}>
                 <span className={styles.configLabel}>{t('basic_settings.proxy_url_label')}</span>
@@ -309,7 +340,7 @@ export function DashboardPage() {
               </div>
             )}
           </div>
-          <Link to="/settings" className={styles.viewMoreLink}>
+          <Link to="/config" className={styles.viewMoreLink}>
             {t('dashboard.edit_settings')} →
           </Link>
         </div>

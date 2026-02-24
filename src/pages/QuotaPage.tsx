@@ -10,6 +10,7 @@ import { authFilesApi, configFileApi } from '@/services/api';
 import {
   QuotaSection,
   ANTIGRAVITY_CONFIG,
+  CLAUDE_CONFIG,
   CODEX_CONFIG,
   GEMINI_CLI_CONFIG,
   KIRO_CONFIG,
@@ -71,6 +72,12 @@ export function QuotaPage() {
 
       {error && <div className={styles.errorBox}>{error}</div>}
 
+      <QuotaSection
+        config={CLAUDE_CONFIG}
+        files={files}
+        loading={loading}
+        disabled={disableControls}
+      />
       <QuotaSection
         config={ANTIGRAVITY_CONFIG}
         files={files}

@@ -49,20 +49,171 @@ export interface UsageDetail {
   };
   failed: boolean;
   __modelName?: string;
+  __timestampMs?: number;
+}
+
+export interface UsageDetailWithEndpoint extends UsageDetail {
+  __endpoint: string;
+  __endpointMethod?: string;
+  __endpointPath?: string;
+  __timestampMs: number;
 }
 
 export interface ApiStats {
   endpoint: string;
   totalRequests: number;
+  successCount: number;
+  failureCount: number;
   totalTokens: number;
   totalCost: number;
-  models: Record<string, { requests: number; tokens: number }>;
+  models: Record<string, { requests: number; successCount: number; failureCount: number; tokens: number }>;
 }
+
+export type UsageTimeRange = '7h' | '24h' | '7d' | 'all';
 
 const TOKENS_PER_PRICE_UNIT = 1_000_000;
 const MODEL_PRICE_STORAGE_KEY = 'cli-proxy-model-prices-v2';
+const USAGE_ENDPOINT_METHOD_REGEX = /^(GET|POST|PUT|PATCH|DELETE|OPTIONS|HEAD)\s+(\S+)/i;
+const USAGE_TIME_RANGE_MS: Record<Exclude<UsageTimeRange, 'all'>, number> = {
+  '7h': 7 * 60 * 60 * 1000,
+  '24h': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000
+};
 
-const normalizeAuthIndex = (value: any) => {
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === 'object' && !Array.isArray(value);
+
+const getApisRecord = (usageData: unknown): Record<string, unknown> | null => {
+  const usageRecord = isRecord(usageData) ? usageData : null;
+  const apisRaw = usageRecord ? usageRecord.apis : null;
+  return isRecord(apisRaw) ? apisRaw : null;
+};
+
+interface UsageSummary {
+  totalRequests: number;
+  successCount: number;
+  failureCount: number;
+  totalTokens: number;
+}
+
+const createUsageSummary = (): UsageSummary => ({
+  totalRequests: 0,
+  successCount: 0,
+  failureCount: 0,
+  totalTokens: 0
+});
+
+const toUsageSummaryFields = (summary: UsageSummary) => ({
+  total_requests: summary.totalRequests,
+  success_count: summary.successCount,
+  failure_count: summary.failureCount,
+  total_tokens: summary.totalTokens
+});
+
+export function filterUsageByTimeRange<T>(usageData: T, range: UsageTimeRange, nowMs: number = Date.now()): T {
+  if (range === 'all') {
+    return usageData;
+  }
+
+  const usageRecord = isRecord(usageData) ? usageData : null;
+  const apis = getApisRecord(usageData);
+  if (!usageRecord || !apis) {
+    return usageData;
+  }
+
+  const rangeMs = USAGE_TIME_RANGE_MS[range];
+  if (!Number.isFinite(rangeMs) || rangeMs <= 0) {
+    return usageData;
+  }
+
+  const windowStart = nowMs - rangeMs;
+  const filteredApis: Record<string, unknown> = {};
+  const totalSummary = createUsageSummary();
+
+  Object.entries(apis).forEach(([apiName, apiEntry]) => {
+    if (!isRecord(apiEntry)) {
+      return;
+    }
+
+    const models = isRecord(apiEntry.models) ? apiEntry.models : null;
+    if (!models) {
+      return;
+    }
+
+    const filteredModels: Record<string, unknown> = {};
+    const apiSummary = createUsageSummary();
+    let hasModelData = false;
+
+    Object.entries(models).forEach(([modelName, modelEntry]) => {
+      if (!isRecord(modelEntry)) {
+        return;
+      }
+
+      const detailsRaw = Array.isArray(modelEntry.details) ? modelEntry.details : [];
+      const modelSummary = createUsageSummary();
+      const filteredDetails: unknown[] = [];
+
+      detailsRaw.forEach((detail) => {
+        const detailRecord = isRecord(detail) ? detail : null;
+        if (!detailRecord || typeof detailRecord.timestamp !== 'string') {
+          return;
+        }
+        const timestamp = Date.parse(detailRecord.timestamp);
+        if (Number.isNaN(timestamp) || timestamp < windowStart || timestamp > nowMs) {
+          return;
+        }
+
+        filteredDetails.push(detail);
+        modelSummary.totalRequests += 1;
+        if (detailRecord.failed === true) {
+          modelSummary.failureCount += 1;
+        } else {
+          modelSummary.successCount += 1;
+        }
+        modelSummary.totalTokens += extractTotalTokens(detailRecord);
+      });
+
+      if (!filteredDetails.length) {
+        return;
+      }
+
+      filteredModels[modelName] = {
+        ...modelEntry,
+        ...toUsageSummaryFields(modelSummary),
+        details: filteredDetails
+      };
+      hasModelData = true;
+
+      apiSummary.totalRequests += modelSummary.totalRequests;
+      apiSummary.successCount += modelSummary.successCount;
+      apiSummary.failureCount += modelSummary.failureCount;
+      apiSummary.totalTokens += modelSummary.totalTokens;
+    });
+
+    if (!hasModelData) {
+      return;
+    }
+
+    filteredApis[apiName] = {
+      ...apiEntry,
+      ...toUsageSummaryFields(apiSummary),
+      models: filteredModels
+    };
+
+    totalSummary.totalRequests += apiSummary.totalRequests;
+    totalSummary.successCount += apiSummary.successCount;
+    totalSummary.failureCount += apiSummary.failureCount;
+    totalSummary.totalTokens += apiSummary.totalTokens;
+  });
+
+  return {
+    ...usageRecord,
+    ...toUsageSummaryFields(totalSummary),
+    apis: filteredApis
+  } as T;
+}
+
+export const normalizeAuthIndex = (value: unknown) => {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value.toString();
   }
@@ -236,17 +387,6 @@ export function maskUsageSensitiveValue(value: unknown, masker: (val: string) =>
 }
 
 /**
- * 格式化 tokens 为百万单位
- */
-export function formatTokensInMillions(value: number): string {
-  const num = Number(value);
-  if (!Number.isFinite(num)) {
-    return '0.00M';
-  }
-  return `${(num / 1_000_000).toFixed(2)}M`;
-}
-
-/**
  * 格式化每分钟数值
  */
 export function formatPerMinuteValue(value: number): string {
@@ -301,38 +441,156 @@ export function formatUsd(value: number): string {
   return `$${parts}`;
 }
 
+const usageDetailsCache = new WeakMap<object, UsageDetail[]>();
+const usageDetailsWithEndpointCache = new WeakMap<object, UsageDetailWithEndpoint[]>();
+
 /**
  * 从使用数据中收集所有请求明细
  */
-export function collectUsageDetails(usageData: any): UsageDetail[] {
-  if (!usageData) {
-    return [];
+export function collectUsageDetails(usageData: unknown): UsageDetail[] {
+  const cacheKey = isRecord(usageData) ? (usageData as object) : null;
+  if (cacheKey) {
+    const cached = usageDetailsCache.get(cacheKey);
+    if (cached) return cached;
   }
-  const apis = usageData.apis || {};
+
+  const apis = getApisRecord(usageData);
+  if (!apis) return [];
   const details: UsageDetail[] = [];
-  Object.values(apis as Record<string, any>).forEach((apiEntry) => {
-    const models = apiEntry?.models || {};
-    Object.entries(models as Record<string, any>).forEach(([modelName, modelEntry]) => {
-      const modelDetails = Array.isArray(modelEntry.details) ? modelEntry.details : [];
-      modelDetails.forEach((detail: any) => {
-        if (detail && detail.timestamp) {
-          details.push({
-            ...detail,
-            source: normalizeUsageSourceId(detail.source),
-            __modelName: modelName
-          });
-        }
+  const sourceCache = new Map<string, string>();
+
+  const normalizeSource = (value: unknown): string => {
+    const raw =
+      typeof value === 'string'
+        ? value
+        : value === null || value === undefined
+          ? ''
+          : String(value);
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+    const cached = sourceCache.get(trimmed);
+    if (cached !== undefined) return cached;
+    const normalized = normalizeUsageSourceId(trimmed);
+    sourceCache.set(trimmed, normalized);
+    return normalized;
+  };
+
+  Object.values(apis).forEach((apiEntry) => {
+    if (!isRecord(apiEntry)) return;
+    const modelsRaw = apiEntry.models;
+    const models = isRecord(modelsRaw) ? modelsRaw : null;
+    if (!models) return;
+
+    Object.entries(models).forEach(([modelName, modelEntry]) => {
+      if (!isRecord(modelEntry)) return;
+      const modelDetailsRaw = modelEntry.details;
+      const modelDetails = Array.isArray(modelDetailsRaw) ? modelDetailsRaw : [];
+
+      modelDetails.forEach((detailRaw) => {
+        if (!isRecord(detailRaw) || typeof detailRaw.timestamp !== 'string') return;
+        const timestamp = detailRaw.timestamp;
+        const timestampMs = Date.parse(timestamp);
+        const tokensRaw = isRecord(detailRaw.tokens) ? detailRaw.tokens : {};
+        details.push({
+          timestamp,
+          source: normalizeSource(detailRaw.source),
+          auth_index: detailRaw.auth_index as unknown as number,
+          tokens: tokensRaw as unknown as UsageDetail['tokens'],
+          failed: detailRaw.failed === true,
+          __modelName: modelName,
+          __timestampMs: Number.isNaN(timestampMs) ? 0 : timestampMs,
+        });
       });
     });
   });
+
+  if (cacheKey) {
+    usageDetailsCache.set(cacheKey, details);
+  }
+  return details;
+}
+
+/**
+ * 从使用数据中收集包含 endpoint/method/path 的请求明细
+ */
+export function collectUsageDetailsWithEndpoint(usageData: unknown): UsageDetailWithEndpoint[] {
+  const cacheKey = isRecord(usageData) ? (usageData as object) : null;
+  if (cacheKey) {
+    const cached = usageDetailsWithEndpointCache.get(cacheKey);
+    if (cached) return cached;
+  }
+
+  const apis = getApisRecord(usageData);
+  if (!apis) return [];
+
+  const details: UsageDetailWithEndpoint[] = [];
+  const sourceCache = new Map<string, string>();
+
+  const normalizeSource = (value: unknown): string => {
+    const raw =
+      typeof value === 'string'
+        ? value
+        : value === null || value === undefined
+          ? ''
+          : String(value);
+    const trimmed = raw.trim();
+    if (!trimmed) return '';
+    const cached = sourceCache.get(trimmed);
+    if (cached !== undefined) return cached;
+    const normalized = normalizeUsageSourceId(trimmed);
+    sourceCache.set(trimmed, normalized);
+    return normalized;
+  };
+
+  Object.entries(apis).forEach(([endpoint, apiEntry]) => {
+    if (!isRecord(apiEntry)) return;
+    const modelsRaw = apiEntry.models;
+    const models = isRecord(modelsRaw) ? modelsRaw : null;
+    if (!models) return;
+
+    const endpointMatch = endpoint.match(USAGE_ENDPOINT_METHOD_REGEX);
+    const endpointMethod = endpointMatch?.[1]?.toUpperCase();
+    const endpointPath = endpointMatch?.[2];
+
+    Object.entries(models).forEach(([modelName, modelEntry]) => {
+      if (!isRecord(modelEntry)) return;
+      const modelDetailsRaw = modelEntry.details;
+      const modelDetails = Array.isArray(modelDetailsRaw) ? modelDetailsRaw : [];
+
+      modelDetails.forEach((detailRaw) => {
+        if (!isRecord(detailRaw) || typeof detailRaw.timestamp !== 'string') return;
+        const timestamp = detailRaw.timestamp;
+        const timestampMs = Date.parse(timestamp);
+        const tokensRaw = isRecord(detailRaw.tokens) ? detailRaw.tokens : {};
+        details.push({
+          timestamp,
+          source: normalizeSource(detailRaw.source),
+          auth_index: detailRaw.auth_index as unknown as number,
+          tokens: tokensRaw as unknown as UsageDetail['tokens'],
+          failed: detailRaw.failed === true,
+          __modelName: modelName,
+          __endpoint: endpoint,
+          __endpointMethod: endpointMethod,
+          __endpointPath: endpointPath,
+          __timestampMs: Number.isNaN(timestampMs) ? 0 : timestampMs,
+        });
+      });
+    });
+  });
+
+  if (cacheKey) {
+    usageDetailsWithEndpointCache.set(cacheKey, details);
+  }
   return details;
 }
 
 /**
  * 从单条明细提取总 tokens
  */
-export function extractTotalTokens(detail: any): number {
-  const tokens = detail?.tokens || {};
+export function extractTotalTokens(detail: unknown): number {
+  const record = isRecord(detail) ? detail : null;
+  const tokensRaw = record?.tokens;
+  const tokens = isRecord(tokensRaw) ? tokensRaw : {};
   if (typeof tokens.total_tokens === 'number') {
     return tokens.total_tokens;
   }
@@ -350,7 +608,7 @@ export function extractTotalTokens(detail: any): number {
 /**
  * 计算 token 分类统计
  */
-export function calculateTokenBreakdown(usageData: any): TokenBreakdown {
+export function calculateTokenBreakdown(usageData: unknown): TokenBreakdown {
   const details = collectUsageDetails(usageData);
   if (!details.length) {
     return { cachedTokens: 0, reasoningTokens: 0 };
@@ -359,8 +617,8 @@ export function calculateTokenBreakdown(usageData: any): TokenBreakdown {
   let cachedTokens = 0;
   let reasoningTokens = 0;
 
-  details.forEach(detail => {
-    const tokens = detail?.tokens || {};
+  details.forEach((detail) => {
+    const tokens = detail.tokens;
     cachedTokens += Math.max(
       typeof tokens.cached_tokens === 'number' ? Math.max(tokens.cached_tokens, 0) : 0,
       typeof tokens.cache_tokens === 'number' ? Math.max(tokens.cache_tokens, 0) : 0
@@ -376,7 +634,10 @@ export function calculateTokenBreakdown(usageData: any): TokenBreakdown {
 /**
  * 计算最近 N 分钟的 RPM/TPM
  */
-export function calculateRecentPerMinuteRates(windowMinutes: number = 30, usageData: any): RateStats {
+export function calculateRecentPerMinuteRates(
+  windowMinutes: number = 30,
+  usageData: unknown
+): RateStats {
   const details = collectUsageDetails(usageData);
   const effectiveWindow = Number.isFinite(windowMinutes) && windowMinutes > 0 ? windowMinutes : 30;
 
@@ -389,9 +650,10 @@ export function calculateRecentPerMinuteRates(windowMinutes: number = 30, usageD
   let requestCount = 0;
   let tokenCount = 0;
 
-  details.forEach(detail => {
-    const timestamp = Date.parse(detail.timestamp);
-    if (Number.isNaN(timestamp) || timestamp < windowStart) {
+  details.forEach((detail) => {
+    const timestamp =
+      typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp < windowStart || timestamp > now) {
       return;
     }
     requestCount += 1;
@@ -411,15 +673,16 @@ export function calculateRecentPerMinuteRates(windowMinutes: number = 30, usageD
 /**
  * 从使用数据获取模型名称列表
  */
-export function getModelNamesFromUsage(usageData: any): string[] {
-  if (!usageData) {
-    return [];
-  }
-  const apis = usageData.apis || {};
+export function getModelNamesFromUsage(usageData: unknown): string[] {
+  const apis = getApisRecord(usageData);
+  if (!apis) return [];
   const names = new Set<string>();
-  Object.values(apis as Record<string, any>).forEach(apiEntry => {
-    const models = apiEntry?.models || {};
-    Object.keys(models).forEach(modelName => {
+  Object.values(apis).forEach((apiEntry) => {
+    if (!isRecord(apiEntry)) return;
+    const modelsRaw = apiEntry.models;
+    const models = isRecord(modelsRaw) ? modelsRaw : null;
+    if (!models) return;
+    Object.keys(models).forEach((modelName) => {
       if (modelName) {
         names.add(modelName);
       }
@@ -431,13 +694,13 @@ export function getModelNamesFromUsage(usageData: any): string[] {
 /**
  * 计算成本数据
  */
-export function calculateCost(detail: any, modelPrices: Record<string, ModelPrice>): number {
+export function calculateCost(detail: UsageDetail, modelPrices: Record<string, ModelPrice>): number {
   const modelName = detail.__modelName || '';
   const price = modelPrices[modelName];
   if (!price) {
     return 0;
   }
-  const tokens = detail?.tokens || {};
+  const tokens = detail.tokens;
   const rawInputTokens = Number(tokens.input_tokens);
   const rawCompletionTokens = Number(tokens.output_tokens);
   const rawCachedTokensPrimary = Number(tokens.cached_tokens);
@@ -461,7 +724,7 @@ export function calculateCost(detail: any, modelPrices: Record<string, ModelPric
 /**
  * 计算总成本
  */
-export function calculateTotalCost(usageData: any, modelPrices: Record<string, ModelPrice>): number {
+export function calculateTotalCost(usageData: unknown, modelPrices: Record<string, ModelPrice>): number {
   const details = collectUsageDetails(usageData);
   if (!details.length || !Object.keys(modelPrices).length) {
     return 0;
@@ -481,16 +744,17 @@ export function loadModelPrices(): Record<string, ModelPrice> {
     if (!raw) {
       return {};
     }
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object') {
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) {
       return {};
     }
     const normalized: Record<string, ModelPrice> = {};
-    Object.entries(parsed).forEach(([model, price]: [string, any]) => {
+    Object.entries(parsed).forEach(([model, price]: [string, unknown]) => {
       if (!model) return;
-      const promptRaw = Number(price?.prompt);
-      const completionRaw = Number(price?.completion);
-      const cacheRaw = Number(price?.cache);
+      const priceRecord = isRecord(price) ? price : null;
+      const promptRaw = Number(priceRecord?.prompt);
+      const completionRaw = Number(priceRecord?.completion);
+      const cacheRaw = Number(priceRecord?.cache);
 
       if (!Number.isFinite(promptRaw) && !Number.isFinite(completionRaw) && !Number.isFinite(cacheRaw)) {
         return;
@@ -534,37 +798,78 @@ export function saveModelPrices(prices: Record<string, ModelPrice>): void {
 /**
  * 获取 API 统计数据
  */
-export function getApiStats(usageData: any, modelPrices: Record<string, ModelPrice>): ApiStats[] {
-  if (!usageData?.apis) {
-    return [];
-  }
-  const apis = usageData.apis;
+export function getApiStats(usageData: unknown, modelPrices: Record<string, ModelPrice>): ApiStats[] {
+  const apis = getApisRecord(usageData);
+  if (!apis) return [];
   const result: ApiStats[] = [];
 
-  Object.entries(apis as Record<string, any>).forEach(([endpoint, apiData]) => {
-    const models: Record<string, { requests: number; tokens: number }> = {};
+  Object.entries(apis).forEach(([endpoint, apiData]) => {
+    if (!isRecord(apiData)) return;
+    const models: Record<string, { requests: number; successCount: number; failureCount: number; tokens: number }> = {};
+    let derivedSuccessCount = 0;
+    let derivedFailureCount = 0;
     let totalCost = 0;
 
-    const modelsData = apiData?.models || {};
-    Object.entries(modelsData as Record<string, any>).forEach(([modelName, modelData]) => {
-      models[modelName] = {
-        requests: modelData.total_requests || 0,
-        tokens: modelData.total_tokens || 0
-      };
+    const modelsData = isRecord(apiData.models) ? apiData.models : {};
+    Object.entries(modelsData).forEach(([modelName, modelData]) => {
+      if (!isRecord(modelData)) return;
+      const details = Array.isArray(modelData.details) ? modelData.details : [];
+      const hasExplicitCounts =
+        typeof modelData.success_count === 'number' || typeof modelData.failure_count === 'number';
+
+      let successCount = 0;
+      let failureCount = 0;
+      if (hasExplicitCounts) {
+        successCount += Number(modelData.success_count) || 0;
+        failureCount += Number(modelData.failure_count) || 0;
+      }
 
       const price = modelPrices[modelName];
-      if (price) {
-        const details = Array.isArray(modelData.details) ? modelData.details : [];
-        details.forEach((detail: any) => {
-          totalCost += calculateCost({ ...detail, __modelName: modelName }, modelPrices);
+      if (details.length > 0 && (!hasExplicitCounts || price)) {
+        details.forEach((detail) => {
+          const detailRecord = isRecord(detail) ? detail : null;
+          if (!hasExplicitCounts) {
+            if (detailRecord?.failed === true) {
+              failureCount += 1;
+            } else {
+              successCount += 1;
+            }
+          }
+
+          if (price && detailRecord) {
+            totalCost += calculateCost(
+              { ...(detailRecord as unknown as UsageDetail), __modelName: modelName },
+              modelPrices
+            );
+          }
         });
       }
+
+      models[modelName] = {
+        requests: Number(modelData.total_requests) || 0,
+        successCount,
+        failureCount,
+        tokens: Number(modelData.total_tokens) || 0
+      };
+      derivedSuccessCount += successCount;
+      derivedFailureCount += failureCount;
     });
+
+    const hasApiExplicitCounts =
+      typeof apiData.success_count === 'number' || typeof apiData.failure_count === 'number';
+    const successCount = hasApiExplicitCounts
+      ? (Number(apiData.success_count) || 0)
+      : derivedSuccessCount;
+    const failureCount = hasApiExplicitCounts
+      ? (Number(apiData.failure_count) || 0)
+      : derivedFailureCount;
 
     result.push({
       endpoint: maskUsageSensitiveValue(endpoint) || endpoint,
-      totalRequests: apiData.total_requests || 0,
-      totalTokens: apiData.total_tokens || 0,
+      totalRequests: Number(apiData.total_requests) || 0,
+      successCount,
+      failureCount,
+      totalTokens: Number(apiData.total_tokens) || 0,
       totalCost,
       models
     });
@@ -576,7 +881,7 @@ export function getApiStats(usageData: any, modelPrices: Record<string, ModelPri
 /**
  * 获取模型统计数据
  */
-export function getModelStats(usageData: any, modelPrices: Record<string, ModelPrice>): Array<{
+export function getModelStats(usageData: unknown, modelPrices: Record<string, ModelPrice>): Array<{
   model: string;
   requests: number;
   successCount: number;
@@ -584,18 +889,22 @@ export function getModelStats(usageData: any, modelPrices: Record<string, ModelP
   tokens: number;
   cost: number;
 }> {
-  if (!usageData?.apis) {
-    return [];
-  }
+  const apis = getApisRecord(usageData);
+  if (!apis) return [];
 
   const modelMap = new Map<string, { requests: number; successCount: number; failureCount: number; tokens: number; cost: number }>();
 
-  Object.values(usageData.apis as Record<string, any>).forEach(apiData => {
-    const models = apiData?.models || {};
-    Object.entries(models as Record<string, any>).forEach(([modelName, modelData]) => {
+  Object.values(apis).forEach((apiData) => {
+    if (!isRecord(apiData)) return;
+    const modelsRaw = apiData.models;
+    const models = isRecord(modelsRaw) ? modelsRaw : null;
+    if (!models) return;
+
+    Object.entries(models).forEach(([modelName, modelData]) => {
+      if (!isRecord(modelData)) return;
       const existing = modelMap.get(modelName) || { requests: 0, successCount: 0, failureCount: 0, tokens: 0, cost: 0 };
-      existing.requests += modelData.total_requests || 0;
-      existing.tokens += modelData.total_tokens || 0;
+      existing.requests += Number(modelData.total_requests) || 0;
+      existing.tokens += Number(modelData.total_tokens) || 0;
 
       const details = Array.isArray(modelData.details) ? modelData.details : [];
 
@@ -609,17 +918,21 @@ export function getModelStats(usageData: any, modelPrices: Record<string, ModelP
       }
 
       if (details.length > 0 && (!hasExplicitCounts || price)) {
-        details.forEach((detail: any) => {
+        details.forEach((detail) => {
+          const detailRecord = isRecord(detail) ? detail : null;
           if (!hasExplicitCounts) {
-            if (detail?.failed === true) {
+            if (detailRecord?.failed === true) {
               existing.failureCount += 1;
             } else {
               existing.successCount += 1;
             }
           }
 
-          if (price) {
-            existing.cost += calculateCost({ ...detail, __modelName: modelName }, modelPrices);
+          if (price && detailRecord) {
+            existing.cost += calculateCost(
+              { ...(detailRecord as unknown as UsageDetail), __modelName: modelName },
+              modelPrices
+            );
           }
         });
       }
@@ -661,22 +974,30 @@ export function formatDayLabel(date: Date): string {
 /**
  * 构建小时级别的数据序列
  */
-export function buildHourlySeriesByModel(usageData: any, metric: 'requests' | 'tokens' = 'requests'): {
+export function buildHourlySeriesByModel(
+  usageData: unknown,
+  metric: 'requests' | 'tokens' = 'requests',
+  hourWindow: number = 24
+): {
   labels: string[];
   dataByModel: Map<string, number[]>;
   hasData: boolean;
 } {
   const hourMs = 60 * 60 * 1000;
+  const resolvedHourWindow =
+    Number.isFinite(hourWindow) && hourWindow > 0
+      ? Math.min(Math.max(Math.floor(hourWindow), 1), 24 * 31)
+      : 24;
   const now = new Date();
   const currentHour = new Date(now);
   currentHour.setMinutes(0, 0, 0);
 
   const earliestBucket = new Date(currentHour);
-  earliestBucket.setHours(earliestBucket.getHours() - 23);
+  earliestBucket.setHours(earliestBucket.getHours() - (resolvedHourWindow - 1));
   const earliestTime = earliestBucket.getTime();
 
   const labels: string[] = [];
-  for (let i = 0; i < 24; i++) {
+  for (let i = 0; i < resolvedHourWindow; i++) {
     const bucketStart = earliestTime + i * hourMs;
     labels.push(formatHourLabel(new Date(bucketStart)));
   }
@@ -689,9 +1010,10 @@ export function buildHourlySeriesByModel(usageData: any, metric: 'requests' | 't
     return { labels, dataByModel, hasData };
   }
 
-  details.forEach(detail => {
-    const timestamp = Date.parse(detail.timestamp);
-    if (Number.isNaN(timestamp)) {
+  details.forEach((detail) => {
+    const timestamp =
+      typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
       return;
     }
 
@@ -728,7 +1050,10 @@ export function buildHourlySeriesByModel(usageData: any, metric: 'requests' | 't
 /**
  * 构建日级别的数据序列
  */
-export function buildDailySeriesByModel(usageData: any, metric: 'requests' | 'tokens' = 'requests'): {
+export function buildDailySeriesByModel(
+  usageData: unknown,
+  metric: 'requests' | 'tokens' = 'requests'
+): {
   labels: string[];
   dataByModel: Map<string, number[]>;
   hasData: boolean;
@@ -742,9 +1067,10 @@ export function buildDailySeriesByModel(usageData: any, metric: 'requests' | 'to
     return { labels: [], dataByModel: new Map(), hasData };
   }
 
-  details.forEach(detail => {
-    const timestamp = Date.parse(detail.timestamp);
-    if (Number.isNaN(timestamp)) {
+  details.forEach((detail) => {
+    const timestamp =
+      typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) {
       return;
     }
     const dayLabel = formatDayLabel(new Date(timestamp));
@@ -846,13 +1172,14 @@ const buildAreaGradient = (context: ScriptableContext<'line'>, baseHex: string, 
  * 构建图表数据
  */
 export function buildChartData(
-  usageData: any,
+  usageData: unknown,
   period: 'hour' | 'day' = 'day',
   metric: 'requests' | 'tokens' = 'requests',
-  selectedModels: string[] = []
+  selectedModels: string[] = [],
+  options: { hourWindowHours?: number } = {}
 ): ChartData {
   const baseSeries = period === 'hour'
-    ? buildHourlySeriesByModel(usageData, metric)
+    ? buildHourlySeriesByModel(usageData, metric, options.hourWindowHours)
     : buildDailySeriesByModel(usageData, metric);
 
   const { labels, dataByModel } = baseSeries;
@@ -904,19 +1231,33 @@ export function buildChartData(
 export type StatusBlockState = 'success' | 'failure' | 'mixed' | 'idle';
 
 /**
+ * 状态栏单个格子的详细信息
+ */
+export interface StatusBlockDetail {
+  success: number;
+  failure: number;
+  /** 该格子的成功率 (0–1)，无请求时为 -1 */
+  rate: number;
+  /** 格子起始时间戳 (ms) */
+  startTime: number;
+  /** 格子结束时间戳 (ms) */
+  endTime: number;
+}
+
+/**
  * 状态栏数据
  */
 export interface StatusBarData {
   blocks: StatusBlockState[];
+  blockDetails: StatusBlockDetail[];
   successRate: number;
   totalSuccess: number;
   totalFailure: number;
 }
 
 /**
- * 计算状态栏数据（最近1小时，分为20个5分钟的时间块）
- * 注意：20个块 × 5分钟 = 100分钟，但我们只使用最近60分钟的数据
- * 所以实际只有最后12个块可能有数据，前8个块将始终为 idle
+ * 计算状态栏数据（最近200分钟，分为20个10分钟的时间块）
+ * 每个时间块代表窗口内的一个等长区间，用于展示成功/失败趋势
  */
 export function calculateStatusBarData(
   usageDetails: UsageDetail[],
@@ -925,7 +1266,7 @@ export function calculateStatusBarData(
 ): StatusBarData {
   const BLOCK_COUNT = 20;
   const BLOCK_DURATION_MS = 10 * 60 * 1000; // 10 minutes
-  const WINDOW_MS = 200 * 60 * 1000; // 200 minutes
+  const WINDOW_MS = BLOCK_COUNT * BLOCK_DURATION_MS; // 200 minutes
 
   const now = Date.now();
   const windowStart = now - WINDOW_MS;
@@ -941,8 +1282,9 @@ export function calculateStatusBarData(
 
   // Filter and bucket the usage details
   usageDetails.forEach((detail) => {
-    const timestamp = Date.parse(detail.timestamp);
-    if (Number.isNaN(timestamp) || timestamp < windowStart || timestamp > now) {
+    const timestamp =
+      typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp < windowStart || timestamp > now) {
       return;
     }
 
@@ -969,18 +1311,30 @@ export function calculateStatusBarData(
     }
   });
 
-  // Convert stats to block states
-  const blocks: StatusBlockState[] = blockStats.map((stat) => {
-    if (stat.success === 0 && stat.failure === 0) {
-      return 'idle';
+  // Convert stats to block states and build details
+  const blocks: StatusBlockState[] = [];
+  const blockDetails: StatusBlockDetail[] = [];
+
+  blockStats.forEach((stat, idx) => {
+    const total = stat.success + stat.failure;
+    if (total === 0) {
+      blocks.push('idle');
+    } else if (stat.failure === 0) {
+      blocks.push('success');
+    } else if (stat.success === 0) {
+      blocks.push('failure');
+    } else {
+      blocks.push('mixed');
     }
-    if (stat.failure === 0) {
-      return 'success';
-    }
-    if (stat.success === 0) {
-      return 'failure';
-    }
-    return 'mixed';
+
+    const blockStartTime = windowStart + idx * BLOCK_DURATION_MS;
+    blockDetails.push({
+      success: stat.success,
+      failure: stat.failure,
+      rate: total > 0 ? stat.success / total : -1,
+      startTime: blockStartTime,
+      endTime: blockStartTime + BLOCK_DURATION_MS,
+    });
   });
 
   // Calculate success rate
@@ -989,14 +1343,110 @@ export function calculateStatusBarData(
 
   return {
     blocks,
+    blockDetails,
     successRate,
     totalSuccess,
     totalFailure
   };
 }
 
-export function computeKeyStats(usageData: any, masker: (val: string) => string = maskApiKey): KeyStats {
-  if (!usageData) {
+/**
+ * 服务健康监测数据（最近168小时/7天，7×96网格）
+ * 每个格子代表15分钟的健康度
+ */
+export interface ServiceHealthData {
+  blocks: StatusBlockState[];
+  blockDetails: StatusBlockDetail[];
+  successRate: number;
+  totalSuccess: number;
+  totalFailure: number;
+  rows: number;
+  cols: number;
+}
+
+export function calculateServiceHealthData(
+  usageDetails: UsageDetail[]
+): ServiceHealthData {
+  const ROWS = 7;
+  const COLS = 96;
+  const BLOCK_COUNT = ROWS * COLS; // 672
+  const BLOCK_DURATION_MS = 15 * 60 * 1000; // 15 minutes
+  const WINDOW_MS = BLOCK_COUNT * BLOCK_DURATION_MS; // 168 hours (7 days)
+
+  const now = Date.now();
+  const windowStart = now - WINDOW_MS;
+
+  const blockStats: Array<{ success: number; failure: number }> = Array.from(
+    { length: BLOCK_COUNT },
+    () => ({ success: 0, failure: 0 })
+  );
+
+  let totalSuccess = 0;
+  let totalFailure = 0;
+
+  usageDetails.forEach((detail) => {
+    const timestamp =
+      typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp < windowStart || timestamp > now) {
+      return;
+    }
+
+    const ageMs = now - timestamp;
+    const blockIndex = BLOCK_COUNT - 1 - Math.floor(ageMs / BLOCK_DURATION_MS);
+
+    if (blockIndex >= 0 && blockIndex < BLOCK_COUNT) {
+      if (detail.failed) {
+        blockStats[blockIndex].failure += 1;
+        totalFailure += 1;
+      } else {
+        blockStats[blockIndex].success += 1;
+        totalSuccess += 1;
+      }
+    }
+  });
+
+  const blocks: StatusBlockState[] = [];
+  const blockDetails: StatusBlockDetail[] = [];
+
+  blockStats.forEach((stat, idx) => {
+    const total = stat.success + stat.failure;
+    if (total === 0) {
+      blocks.push('idle');
+    } else if (stat.failure === 0) {
+      blocks.push('success');
+    } else if (stat.success === 0) {
+      blocks.push('failure');
+    } else {
+      blocks.push('mixed');
+    }
+
+    const blockStartTime = windowStart + idx * BLOCK_DURATION_MS;
+    blockDetails.push({
+      success: stat.success,
+      failure: stat.failure,
+      rate: total > 0 ? stat.success / total : -1,
+      startTime: blockStartTime,
+      endTime: blockStartTime + BLOCK_DURATION_MS,
+    });
+  });
+
+  const total = totalSuccess + totalFailure;
+  const successRate = total > 0 ? (totalSuccess / total) * 100 : 100;
+
+  return {
+    blocks,
+    blockDetails,
+    successRate,
+    totalSuccess,
+    totalFailure,
+    rows: ROWS,
+    cols: COLS,
+  };
+}
+
+export function computeKeyStats(usageData: unknown, masker: (val: string) => string = maskApiKey): KeyStats {
+  const apis = getApisRecord(usageData);
+  if (!apis) {
     return { bySource: {}, byAuthIndex: {} };
   }
 
@@ -1010,17 +1460,21 @@ export function computeKeyStats(usageData: any, masker: (val: string) => string 
     return bucket[key];
   };
 
-  const apis = usageData.apis || {};
-  Object.values(apis as any).forEach((apiEntry: any) => {
-    const models = apiEntry?.models || {};
+  Object.values(apis).forEach((apiEntry) => {
+    if (!isRecord(apiEntry)) return;
+    const modelsRaw = apiEntry.models;
+    const models = isRecord(modelsRaw) ? modelsRaw : null;
+    if (!models) return;
 
-    Object.values(models as any).forEach((modelEntry: any) => {
-      const details = modelEntry?.details || [];
+    Object.values(models).forEach((modelEntry) => {
+      if (!isRecord(modelEntry)) return;
+      const details = Array.isArray(modelEntry.details) ? modelEntry.details : [];
 
-      details.forEach((detail: any) => {
-        const source = normalizeUsageSourceId(detail?.source, masker);
-        const authIndexKey = normalizeAuthIndex(detail?.auth_index);
-        const isFailed = detail?.failed === true;
+      details.forEach((detail) => {
+        const detailRecord = isRecord(detail) ? detail : null;
+        const source = normalizeUsageSourceId(detailRecord?.source, masker);
+        const authIndexKey = normalizeAuthIndex(detailRecord?.auth_index);
+        const isFailed = detailRecord?.failed === true;
 
         if (source) {
           const bucket = ensureBucket(sourceStats, source);
@@ -1047,4 +1501,251 @@ export function computeKeyStats(usageData: any, masker: (val: string) => string 
     bySource: sourceStats,
     byAuthIndex: authIndexStats
   };
+}
+
+export function computeKeyStatsFromDetails(usageDetails: UsageDetail[]): KeyStats {
+  const bySource: Record<string, KeyStatBucket> = {};
+  const byAuthIndex: Record<string, KeyStatBucket> = {};
+
+  const ensureBucket = (bucket: Record<string, KeyStatBucket>, key: string) => {
+    if (!bucket[key]) {
+      bucket[key] = { success: 0, failure: 0 };
+    }
+    return bucket[key];
+  };
+
+  usageDetails.forEach((detail) => {
+    const source = detail.source;
+    const authIndexKey = normalizeAuthIndex(detail.auth_index);
+    const isFailed = detail.failed === true;
+
+    if (source) {
+      const bucket = ensureBucket(bySource, source);
+      if (isFailed) {
+        bucket.failure += 1;
+      } else {
+        bucket.success += 1;
+      }
+    }
+
+    if (authIndexKey) {
+      const bucket = ensureBucket(byAuthIndex, authIndexKey);
+      if (isFailed) {
+        bucket.failure += 1;
+      } else {
+        bucket.success += 1;
+      }
+    }
+  });
+
+  return { bySource, byAuthIndex };
+}
+
+export type TokenCategory = 'input' | 'output' | 'cached' | 'reasoning';
+
+export interface TokenBreakdownSeries {
+  labels: string[];
+  dataByCategory: Record<TokenCategory, number[]>;
+  hasData: boolean;
+}
+
+/**
+ * 按 token 类别构建小时级别的堆叠序列
+ */
+export function buildHourlyTokenBreakdown(
+  usageData: unknown,
+  hourWindow: number = 24
+): TokenBreakdownSeries {
+  const hourMs = 60 * 60 * 1000;
+  const resolvedHourWindow =
+    Number.isFinite(hourWindow) && hourWindow > 0
+      ? Math.min(Math.max(Math.floor(hourWindow), 1), 24 * 31)
+      : 24;
+  const now = new Date();
+  const currentHour = new Date(now);
+  currentHour.setMinutes(0, 0, 0);
+
+  const earliestBucket = new Date(currentHour);
+  earliestBucket.setHours(earliestBucket.getHours() - (resolvedHourWindow - 1));
+  const earliestTime = earliestBucket.getTime();
+
+  const labels: string[] = [];
+  for (let i = 0; i < resolvedHourWindow; i++) {
+    labels.push(formatHourLabel(new Date(earliestTime + i * hourMs)));
+  }
+
+  const dataByCategory: Record<TokenCategory, number[]> = {
+    input: new Array(labels.length).fill(0),
+    output: new Array(labels.length).fill(0),
+    cached: new Array(labels.length).fill(0),
+    reasoning: new Array(labels.length).fill(0),
+  };
+
+  const details = collectUsageDetails(usageData);
+  let hasData = false;
+
+  details.forEach((detail) => {
+    const timestamp =
+      typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return;
+    const normalized = new Date(timestamp);
+    normalized.setMinutes(0, 0, 0);
+    const bucketStart = normalized.getTime();
+    const lastBucketTime = earliestTime + (labels.length - 1) * hourMs;
+    if (bucketStart < earliestTime || bucketStart > lastBucketTime) return;
+    const bucketIndex = Math.floor((bucketStart - earliestTime) / hourMs);
+    if (bucketIndex < 0 || bucketIndex >= labels.length) return;
+
+    const tokens = detail.tokens;
+    const input = typeof tokens.input_tokens === 'number' ? Math.max(tokens.input_tokens, 0) : 0;
+    const output = typeof tokens.output_tokens === 'number' ? Math.max(tokens.output_tokens, 0) : 0;
+    const cached = Math.max(
+      typeof tokens.cached_tokens === 'number' ? Math.max(tokens.cached_tokens, 0) : 0,
+      typeof tokens.cache_tokens === 'number' ? Math.max(tokens.cache_tokens, 0) : 0,
+    );
+    const reasoning = typeof tokens.reasoning_tokens === 'number' ? Math.max(tokens.reasoning_tokens, 0) : 0;
+
+    dataByCategory.input[bucketIndex] += input;
+    dataByCategory.output[bucketIndex] += output;
+    dataByCategory.cached[bucketIndex] += cached;
+    dataByCategory.reasoning[bucketIndex] += reasoning;
+    hasData = true;
+  });
+
+  return { labels, dataByCategory, hasData };
+}
+
+/**
+ * 按 token 类别构建日级别的堆叠序列
+ */
+export function buildDailyTokenBreakdown(usageData: unknown): TokenBreakdownSeries {
+  const details = collectUsageDetails(usageData);
+  const dayMap: Record<string, Record<TokenCategory, number>> = {};
+  let hasData = false;
+
+  details.forEach((detail) => {
+    const timestamp =
+      typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return;
+    const dayLabel = formatDayLabel(new Date(timestamp));
+    if (!dayLabel) return;
+
+    if (!dayMap[dayLabel]) {
+      dayMap[dayLabel] = { input: 0, output: 0, cached: 0, reasoning: 0 };
+    }
+
+    const tokens = detail.tokens;
+    const input = typeof tokens.input_tokens === 'number' ? Math.max(tokens.input_tokens, 0) : 0;
+    const output = typeof tokens.output_tokens === 'number' ? Math.max(tokens.output_tokens, 0) : 0;
+    const cached = Math.max(
+      typeof tokens.cached_tokens === 'number' ? Math.max(tokens.cached_tokens, 0) : 0,
+      typeof tokens.cache_tokens === 'number' ? Math.max(tokens.cache_tokens, 0) : 0,
+    );
+    const reasoning = typeof tokens.reasoning_tokens === 'number' ? Math.max(tokens.reasoning_tokens, 0) : 0;
+
+    dayMap[dayLabel].input += input;
+    dayMap[dayLabel].output += output;
+    dayMap[dayLabel].cached += cached;
+    dayMap[dayLabel].reasoning += reasoning;
+    hasData = true;
+  });
+
+  const labels = Object.keys(dayMap).sort();
+  const dataByCategory: Record<TokenCategory, number[]> = {
+    input: labels.map((l) => dayMap[l].input),
+    output: labels.map((l) => dayMap[l].output),
+    cached: labels.map((l) => dayMap[l].cached),
+    reasoning: labels.map((l) => dayMap[l].reasoning),
+  };
+
+  return { labels, dataByCategory, hasData };
+}
+
+export interface CostSeries {
+  labels: string[];
+  data: number[];
+  hasData: boolean;
+}
+
+/**
+ * 按小时构建费用时间序列
+ */
+export function buildHourlyCostSeries(
+  usageData: unknown,
+  modelPrices: Record<string, ModelPrice>,
+  hourWindow: number = 24
+): CostSeries {
+  const hourMs = 60 * 60 * 1000;
+  const resolvedHourWindow =
+    Number.isFinite(hourWindow) && hourWindow > 0
+      ? Math.min(Math.max(Math.floor(hourWindow), 1), 24 * 31)
+      : 24;
+  const now = new Date();
+  const currentHour = new Date(now);
+  currentHour.setMinutes(0, 0, 0);
+
+  const earliestBucket = new Date(currentHour);
+  earliestBucket.setHours(earliestBucket.getHours() - (resolvedHourWindow - 1));
+  const earliestTime = earliestBucket.getTime();
+
+  const labels: string[] = [];
+  for (let i = 0; i < resolvedHourWindow; i++) {
+    labels.push(formatHourLabel(new Date(earliestTime + i * hourMs)));
+  }
+
+  const data = new Array(labels.length).fill(0);
+  const details = collectUsageDetails(usageData);
+  let hasData = false;
+
+  details.forEach((detail) => {
+    const timestamp =
+      typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return;
+    const normalized = new Date(timestamp);
+    normalized.setMinutes(0, 0, 0);
+    const bucketStart = normalized.getTime();
+    const lastBucketTime = earliestTime + (labels.length - 1) * hourMs;
+    if (bucketStart < earliestTime || bucketStart > lastBucketTime) return;
+    const bucketIndex = Math.floor((bucketStart - earliestTime) / hourMs);
+    if (bucketIndex < 0 || bucketIndex >= labels.length) return;
+
+    const cost = calculateCost(detail, modelPrices);
+    if (cost > 0) {
+      data[bucketIndex] += cost;
+      hasData = true;
+    }
+  });
+
+  return { labels, data, hasData };
+}
+
+/**
+ * 按天构建费用时间序列
+ */
+export function buildDailyCostSeries(
+  usageData: unknown,
+  modelPrices: Record<string, ModelPrice>
+): CostSeries {
+  const details = collectUsageDetails(usageData);
+  const dayMap: Record<string, number> = {};
+  let hasData = false;
+
+  details.forEach((detail) => {
+    const timestamp =
+      typeof detail.__timestampMs === 'number' ? detail.__timestampMs : Date.parse(detail.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= 0) return;
+    const dayLabel = formatDayLabel(new Date(timestamp));
+    if (!dayLabel) return;
+
+    const cost = calculateCost(detail, modelPrices);
+    if (cost > 0) {
+      dayMap[dayLabel] = (dayMap[dayLabel] || 0) + cost;
+      hasData = true;
+    }
+  });
+
+  const labels = Object.keys(dayMap).sort();
+  const data = labels.map((l) => dayMap[l]);
+
+  return { labels, data, hasData };
 }

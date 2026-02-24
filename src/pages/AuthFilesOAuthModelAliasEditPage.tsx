@@ -29,6 +29,7 @@ const OAUTH_PROVIDER_PRESETS = [
   'claude',
   'codex',
   'qwen',
+  'kimi',
   'iflow',
 ];
 
@@ -40,7 +41,7 @@ const buildEmptyMappingEntry = (): OAuthModelMappingFormEntry => ({
   id: generateId(),
   name: '',
   alias: '',
-  fork: false,
+  fork: true,
 });
 
 const normalizeMappingEntries = (

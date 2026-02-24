@@ -4,7 +4,7 @@
 .container {
   min-height: 100vh;
   display: flex;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
 }
 
 // 左侧品牌展示区
@@ -88,7 +88,7 @@
   justify-content: center;
   align-items: center;
   padding: $spacing-2xl;
-  background: var(--bg-primary);
+  background: var(--bg-secondary);
   position: relative;
 
   @media (max-width: $breakpoint-mobile) {
@@ -167,9 +167,24 @@
   font-size: 14px;
 }
 
-// 语言切换按钮
-.languageBtn {
+// 语言下拉选择
+.languageSelect {
   white-space: nowrap;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  cursor: pointer;
+  height: 40px;
+  box-sizing: border-box;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba($primary-color, 0.18);
+  }
 }
 
 // 连接信息框
@@ -220,8 +235,8 @@
 
 // 错误提示框
 .errorBox {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba($error-color, 0.1);
+  border: 1px solid rgba($error-color, 0.4);
   border-radius: $radius-md;
   padding: $spacing-sm $spacing-md;
   color: $error-color;

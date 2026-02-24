@@ -6,6 +6,9 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
+  padding-bottom: calc(
+    var(--config-action-bar-height, 0px) + 16px + env(safe-area-inset-bottom) + #{$spacing-md}
+  );
 }
 
 .pageTitle {
@@ -19,6 +22,76 @@
   font-size: 14px;
   color: var(--text-secondary);
   margin: 0 0 $spacing-xl 0;
+}
+
+.tabBar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: $spacing-lg;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-radius: $radius-full;
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  @include mobile {
+    width: 100%;
+
+    .tabItem {
+      flex: 1;
+    }
+  }
+}
+
+.tabItem {
+  @include button-reset;
+  padding: 10px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: $radius-full;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:hover:not(:disabled) {
+    color: var(--text-primary);
+    background: var(--bg-tertiary);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &:focus {
+    outline: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+  }
+}
+
+.tabActive {
+  color: var(--text-primary);
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  box-shadow: var(--shadow);
 }
 
 .content {
@@ -119,15 +192,15 @@
   color: var(--text-secondary);
 
   &.modified {
-    color: #f59e0b;
+    color: var(--warning-color);
   }
 
   &.saved {
-    color: #16a34a;
+    color: var(--success-color);
   }
 
   &.error {
-    color: #dc2626;
+    color: var(--danger-color);
   }
 }
 
@@ -239,6 +312,112 @@
     button {
       flex: 1;
     }
+  }
+}
+
+.floatingActionContainer {
+  position: fixed;
+  left: var(--content-center-x, 50%);
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 50;
+  pointer-events: auto;
+  width: fit-content;
+  max-width: calc(100vw - 24px);
+}
+
+.floatingActionList {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--bg-primary) 82%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid color-mix(in srgb, var(--border-color) 60%, transparent);
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+  max-width: inherit;
+  overflow-x: auto;
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+.floatingStatus {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  text-align: center;
+  max-width: min(280px, 46vw);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.floatingActionButton {
+  @include button-reset;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  cursor: pointer;
+  color: var(--text-primary);
+  transition: background-color 0.2s ease, transform 0.15s ease;
+
+  &:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--text-primary) 10%, transparent);
+    transform: scale(1.08);
+  }
+
+  &:active:not(:disabled) {
+    transform: scale(0.95);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+  }
+}
+
+.dirtyDot {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--warning-color);
+  box-shadow: 0 0 0 2px rgba($warning-color, 0.25);
+}
+
+@media (max-width: 1200px) {
+  .floatingActionContainer {
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    max-width: calc(100vw - 16px);
+  }
+
+  .floatingActionList {
+    gap: 6px;
+    padding: 8px 10px;
+  }
+
+  .floatingStatus {
+    display: none;
+  }
+
+  .floatingActionButton {
+    width: 38px;
+    height: 38px;
+    flex: 0 0 auto;
   }
 }
 

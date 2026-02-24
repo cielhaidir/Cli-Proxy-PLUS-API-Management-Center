@@ -10,6 +10,7 @@ api.md
 usage.json
 CLAUDE.md
 AGENTS.md
+management-api*
 antigravity_usage.json
 codex_usage.json
 style.md
@@ -18,6 +19,7 @@ node_modules
 dist
 dist-ssr
 *.local
+skills
 
 # Editor directories and files
 settings.local.json
@@ -33,3 +35,4 @@ settings.local.json
 tmpclaude*
 .claude
 CLIProxyAPI
+example

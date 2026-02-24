@@ -24,7 +24,7 @@ type QuotaSetter<T> = (updater: QuotaUpdater<T>) => void;
 
 type ViewMode = 'paged' | 'all';
 
-const MAX_ITEMS_PER_PAGE = 14;
+const MAX_ITEMS_PER_PAGE = 25;
 const MAX_SHOW_ALL_THRESHOLD = 30;
 
 interface QuotaPaginationState<T> {
@@ -271,6 +271,7 @@ export function QuotaSection<TState extends QuotaStatusState, TData>({
                 quota={quota[item.name]}
                 resolvedTheme={resolvedTheme}
                 i18nPrefix={config.i18nPrefix}
+                cardIdleMessageKey={config.cardIdleMessageKey}
                 cardClassName={config.cardClassName}
                 defaultType={config.type}
                 renderQuotaItems={config.renderQuotaItems}

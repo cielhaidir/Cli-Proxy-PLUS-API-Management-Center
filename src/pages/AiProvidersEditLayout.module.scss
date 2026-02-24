@@ -3,3 +3,31 @@
   max-width: 960px;
   margin: 0 auto;
 }
+
+.floatingActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.floatingBackButton {
+  min-width: 82px;
+}
+
+.floatingSaveButton {
+  min-width: 88px;
+}
+
+.upstreamApiKeyRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.upstreamApiKeyHint {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 13px;
+}

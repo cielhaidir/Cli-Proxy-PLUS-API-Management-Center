@@ -1,6 +1,13 @@
-import { ReactNode, useCallback, useLayoutEffect, useRef, useState } from 'react';
+import {
+  ReactNode,
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react';
 import { useLocation, type Location } from 'react-router-dom';
 import gsap from 'gsap';
+import { PageTransitionLayerContext, type LayerStatus } from './PageTransitionLayer';
 import './PageTransition.scss';
 
 interface PageTransitionProps {
@@ -18,8 +25,6 @@ const IOS_EXIT_TO_X_PERCENT_FORWARD = -30;
 const IOS_EXIT_TO_X_PERCENT_BACKWARD = 100;
 const IOS_ENTER_FROM_X_PERCENT_BACKWARD = -30;
 const IOS_EXIT_DIM_OPACITY = 0.72;
-
-type LayerStatus = 'current' | 'exiting' | 'stacked';
 
 type Layer = {
   key: string;
@@ -363,7 +368,9 @@ export function PageTransition({
                 : undefined
           }
         >
-          {render(layer.location)}
+          <PageTransitionLayerContext.Provider value={{ status: layer.status }}>
+            {render(layer.location)}
+          </PageTransitionLayerContext.Provider>
         </div>
           );
         });

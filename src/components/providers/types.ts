@@ -2,14 +2,6 @@ import type { ApiKeyEntry, GeminiKeyConfig, ProviderKeyConfig } from '@/types';
 import type { HeaderEntry } from '@/utils/headers';
 import type { KeyStats, UsageDetail } from '@/utils/usage';
 
-export type ProviderModal =
-  | { type: 'gemini'; index: number | null }
-  | { type: 'codex'; index: number | null }
-  | { type: 'claude'; index: number | null }
-  | { type: 'vertex'; index: number | null }
-  | { type: 'ampcode'; index: null }
-  | { type: 'openai'; index: number | null };
-
 export interface ModelEntry {
   name: string;
   alias: string;
@@ -17,6 +9,7 @@ export interface ModelEntry {
 
 export interface OpenAIFormState {
   name: string;
+  priority?: number;
   prefix: string;
   baseUrl: string;
   headers: HeaderEntry[];
@@ -32,8 +25,9 @@ export interface AmpcodeFormState {
   mappingEntries: ModelEntry[];
 }
 
-export type GeminiFormState = Omit<GeminiKeyConfig, 'headers'> & {
+export type GeminiFormState = Omit<GeminiKeyConfig, 'headers' | 'models'> & {
   headers: HeaderEntry[];
+  modelEntries: ModelEntry[];
   excludedText: string;
 };
 
@@ -57,13 +51,4 @@ export interface ProviderSectionProps<TConfig> {
   onAdd: () => void;
   onDelete: (index: number) => void;
   onToggle?: (index: number, enabled: boolean) => void;
-}
-
-export interface ProviderModalProps<TConfig, TPayload = TConfig> {
-  isOpen: boolean;
-  editIndex: number | null;
-  initialData?: TConfig;
-  onClose: () => void;
-  onSave: (data: TPayload, index: number | null) => Promise<void>;
-  disabled?: boolean;
 }

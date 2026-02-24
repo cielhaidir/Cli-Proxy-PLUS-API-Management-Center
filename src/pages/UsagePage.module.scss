@@ -25,6 +25,29 @@
   flex-wrap: wrap;
 }
 
+.lastRefreshed {
+  font-size: 11px;
+  color: var(--text-tertiary);
+  white-space: nowrap;
+}
+
+.timeRangeGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.timeRangeLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.timeRangeSelectControl {
+  min-width: 164px;
+}
+
 .pageTitle {
   font-size: 28px;
   font-weight: 700;
@@ -34,7 +57,7 @@
 
 .errorBox {
   padding: 10px;
-  background-color: rgba(239, 68, 68, 0.1);
+  background-color: rgba($error-color, 0.1);
   border: 1px solid var(--error-color);
   border-radius: $radius-sm;
   color: var(--error-color);
@@ -55,13 +78,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(243, 244, 246, 0.75);
+  background: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-}
-
-:global([data-theme='dark']) .loadingOverlay {
-  background: rgba(25, 25, 25, 0.72);
 }
 
 .loadingOverlayContent {
@@ -76,9 +95,9 @@
 }
 
 .loadingOverlaySpinner {
-  border-color: rgba(59, 130, 246, 0.25);
+  border-color: rgba($primary-color, 0.25);
   border-top-color: var(--primary-color);
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
+  box-shadow: 0 0 10px rgba($primary-color, 0.25);
 }
 
 .loadingOverlayText {
@@ -99,9 +118,9 @@
 }
 
 .statCard {
-  --accent: #3b82f6;
-  --accent-soft: rgba(59, 130, 246, 0.18);
-  --accent-border: rgba(59, 130, 246, 0.35);
+  --accent: var(--primary-color);
+  --accent-soft: rgba($primary-color, 0.18);
+  --accent-border: rgba($primary-color, 0.35);
 
   grid-column: span 4;
   position: relative;
@@ -251,11 +270,11 @@
 }
 
 .statSuccess {
-  color: var(--success-color, #22c55e);
+  color: var(--success-color);
 }
 
 .statFailure {
-  color: var(--danger-color, #ef4444);
+  color: var(--danger-color);
 }
 
 .statNeutral {
@@ -314,6 +333,42 @@
 }
 
 // API List (80%比例)
+.apiSortBar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.apiSortBtn {
+  padding: 4px 10px;
+  border-radius: $radius-full;
+  border: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+
+  &:hover {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 1px;
+  }
+}
+
+.apiSortBtnActive {
+  border-color: rgba($primary-color, 0.5);
+  background: rgba($primary-color, 0.1);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
 .apiList {
   display: flex;
   flex-direction: column;
@@ -328,15 +383,26 @@
 }
 
 .apiHeader {
+  width: 100%;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   cursor: pointer;
   transition: background-color 0.15s ease;
 
   &:hover {
     background-color: var(--bg-tertiary);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: -2px;
   }
 }
 
@@ -418,6 +484,26 @@
   }
 }
 
+// Fixed-height cards with internal scrolling (API details / model stats)
+.detailsFixedCard {
+  display: flex;
+  flex-direction: column;
+  height: 520px;
+  overflow: hidden;
+
+  @include mobile {
+    height: 420px;
+  }
+}
+
+.detailsScroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
 // Table (80%比例)
 .tableWrapper {
   overflow-x: auto;
@@ -441,6 +527,15 @@
     white-space: nowrap;
   }
 
+  th.sortableHeader {
+    user-select: none;
+    transition: color 0.15s ease;
+
+    &:hover {
+      color: var(--text-primary);
+    }
+  }
+
   td {
     color: var(--text-primary);
   }
@@ -450,10 +545,42 @@
   }
 }
 
+.sortHeaderButton {
+  display: inline-flex;
+  align-items: center;
+  width: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--primary-color);
+    outline-offset: 2px;
+    border-radius: $radius-sm;
+  }
+}
+
 .modelCell {
   font-weight: 500;
   max-width: 240px;
   word-break: break-all;
+}
+
+.credentialType {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: $radius-full;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  vertical-align: middle;
 }
 
 .requestCountCell {
@@ -519,24 +646,6 @@
   :global(.input) {
     height: 40px;
     box-sizing: border-box;
-  }
-}
-
-.select {
-  padding: 10px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: $radius-md;
-  background-color: var(--bg-primary);
-  color: var(--text-primary);
-  font-size: 14px;
-  cursor: pointer;
-  height: 40px;
-  box-sizing: border-box;
-
-  &:focus {
-    outline: none;
-    border-color: var(--primary-color);
-    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
   }
 }
 
@@ -606,6 +715,12 @@
   display: flex;
   gap: 3px;
   flex-shrink: 0;
+}
+
+.editModalBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 // Chart Section (80%比例)
@@ -744,6 +859,98 @@
   }
 }
 
+.requestEventsActions {
+  display: inline-flex;
+  align-items: center;
+  gap: $spacing-xs;
+  flex-wrap: wrap;
+}
+
+.requestEventsToolbar {
+  display: flex;
+  gap: $spacing-sm;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: $spacing-sm;
+}
+
+.requestEventsFilterItem {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.requestEventsFilterLabel {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
+.requestEventsSelect {
+  min-width: 180px;
+}
+
+.requestEventsMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: $spacing-sm;
+  margin-bottom: $spacing-xs;
+  font-size: 12px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+
+.requestEventsLimitHint {
+  color: var(--text-tertiary);
+}
+
+.requestEventsTableWrapper {
+  overflow: auto;
+  max-height: 460px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+}
+
+.requestEventsTimestamp {
+  white-space: nowrap;
+  min-width: 160px;
+}
+
+.requestEventsSourceCell,
+.requestEventsAuthIndex {
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New',
+    monospace;
+  font-size: 11px;
+  max-width: 180px;
+  word-break: break-all;
+}
+
+.requestEventsResultSuccess {
+  color: var(--success-badge-text, #065f46);
+  background: var(--success-badge-bg, #d1fae5);
+  border: 1px solid var(--success-badge-border, #6ee7b7);
+}
+
+.requestEventsResultFailed {
+  color: var(--failure-badge-text);
+  background: var(--failure-badge-bg);
+  border: 1px solid var(--failure-badge-border);
+}
+
+.requestEventsResultSuccess,
+.requestEventsResultFailed {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: $radius-full;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .chartLineHeader {
   display: inline-flex;
   align-items: center;
@@ -794,4 +1001,267 @@
   font-size: 12px;
   color: var(--text-tertiary);
   margin: 10px 0 0 0;
+}
+
+// Service Health Card
+.healthCard {
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: $radius-lg;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: var(--shadow-lg);
+}
+
+.healthHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.healthTitle {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.healthMeta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.healthWindow {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.healthRate {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+}
+
+.healthRateHigh {
+  color: var(--success-badge-text, #065f46);
+  background: var(--success-badge-bg, #d1fae5);
+}
+
+.healthRateMedium {
+  color: var(--warning-text, #92400e);
+  background: var(--warning-bg, #fef3c7);
+}
+
+.healthRateLow {
+  color: var(--failure-badge-text);
+  background: var(--failure-badge-bg);
+}
+
+.healthGridScroller {
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+.healthGrid {
+  display: grid;
+  gap: 3px;
+  grid-auto-flow: column;
+  grid-template-rows: repeat(7, 10px);
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.healthBlockWrapper {
+  position: relative;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  width: 10px;
+  height: 10px;
+}
+
+.healthBlock {
+  width: 100%;
+  height: 100%;
+  border-radius: 2px;
+  transition: transform 0.15s ease, opacity 0.15s ease;
+
+  .healthBlockWrapper:hover &,
+  .healthBlockWrapper.healthBlockActive & {
+    transform: scaleY(1.6);
+    opacity: 0.85;
+  }
+}
+
+.healthBlockIdle {
+  background-color: var(--border-secondary, #e5e7eb);
+}
+
+.healthTooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-primary, #fff);
+  border: 1px solid var(--border-secondary, #e5e7eb);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  z-index: $z-dropdown;
+  pointer-events: none;
+  color: var(--text-primary);
+
+  &::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: var(--bg-primary, #fff);
+  }
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 6px solid transparent;
+    border-top-color: var(--border-secondary, #e5e7eb);
+  }
+}
+
+// When tooltip should appear below (for top rows)
+.healthTooltipBelow {
+  bottom: auto;
+  top: calc(100% + 8px);
+
+  &::after {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: var(--bg-primary, #fff);
+  }
+
+  &::before {
+    top: auto;
+    bottom: 100%;
+    border-top-color: transparent;
+    border-bottom-color: var(--border-secondary, #e5e7eb);
+  }
+}
+
+.healthTooltipLeft {
+  left: 0;
+  transform: translateX(0);
+
+  &::after,
+  &::before {
+    left: 8px;
+    transform: none;
+  }
+}
+
+.healthTooltipRight {
+  left: auto;
+  right: 0;
+  transform: translateX(0);
+
+  &::after,
+  &::before {
+    left: auto;
+    right: 8px;
+    transform: none;
+  }
+}
+
+.healthTooltipTime {
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 2px;
+}
+
+.healthTooltipStats {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.healthTooltipSuccess {
+  color: var(--success-color, #22c55e);
+}
+
+.healthTooltipFailure {
+  color: var(--danger-color, #ef4444);
+}
+
+.healthTooltipRate {
+  color: var(--text-secondary);
+  margin-left: 2px;
+}
+
+.healthLegend {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.healthLegendLabel {
+  font-size: 10px;
+  color: var(--text-tertiary);
+}
+
+.healthLegendColors {
+  display: flex;
+  gap: 3px;
+}
+
+.healthLegendBlock {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+@include mobile {
+  .healthCard {
+    padding: 14px;
+    gap: 10px;
+  }
+
+  .healthGrid {
+    grid-template-rows: repeat(7, 6px);
+    gap: 2px;
+    margin: 0;
+  }
+
+  .healthBlockWrapper {
+    width: 6px;
+    height: 6px;
+  }
+
+  .healthTooltip {
+    font-size: 10px;
+    padding: 4px 8px;
+  }
+
+  .healthLegendBlock {
+    width: 8px;
+    height: 8px;
+  }
 }

@@ -1,4 +1,4 @@
-import { useDeferredValue, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
@@ -20,8 +20,20 @@ import {
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useAuthStore, useConfigStore, useNotificationStore } from '@/stores';
 import { logsApi } from '@/services/api/logs';
+import { copyToClipboard } from '@/utils/clipboard';
+import { downloadBlob } from '@/utils/download';
 import { MANAGEMENT_API_PREFIX } from '@/utils/constants';
 import { formatUnixTimestamp } from '@/utils/format';
+import {
+  HTTP_METHODS,
+  STATUS_GROUPS,
+  resolveStatusGroup,
+  type LogState,
+} from './hooks/logTypes';
+import { parseLogLine } from './hooks/logParsing';
+import { useLogFilters } from './hooks/useLogFilters';
+import { isNearBottom, useLogScroller } from './hooks/useLogScroller';
+import { isTraceableRequestPath, useTraceResolver } from './hooks/useTraceResolver';
 import styles from './LogsPage.module.scss';
 
 interface ErrorLogItem {
@@ -30,309 +42,11 @@ interface ErrorLogItem {
   modified?: number;
 }
 
-type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
-
-type LogState = {
-  buffer: string[];
-  visibleFrom: number;
-};
-
 // 初始只渲染最近 100 行，滚动到顶部再逐步加载更多（避免一次性渲染过多导致卡顿）
 const INITIAL_DISPLAY_LINES = 100;
-const LOAD_MORE_LINES = 200;
 const MAX_BUFFER_LINES = 10000;
-const LOAD_MORE_THRESHOLD_PX = 72;
 const LONG_PRESS_MS = 650;
 const LONG_PRESS_MOVE_THRESHOLD = 10;
-
-const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'] as const;
-type HttpMethod = (typeof HTTP_METHODS)[number];
-const HTTP_METHOD_REGEX = new RegExp(`\\b(${HTTP_METHODS.join('|')})\\b`);
-
-const LOG_TIMESTAMP_REGEX = /^\[?(\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)\]?/;
-const LOG_LEVEL_REGEX = /^\[?(trace|debug|info|warn|warning|error|fatal)\s*\]?(?=\s|\[|$)\s*/i;
-const LOG_SOURCE_REGEX = /^\[([^\]]+)\]/;
-const LOG_LATENCY_REGEX =
-  /\b(?:\d+(?:\.\d+)?\s*(?:µs|us|ms|s|m))(?:\s*\d+(?:\.\d+)?\s*(?:µs|us|ms|s|m))*\b/i;
-const LOG_IPV4_REGEX = /\b(?:\d{1,3}\.){3}\d{1,3}\b/;
-const LOG_IPV6_REGEX = /\b(?:[a-f0-9]{0,4}:){2,7}[a-f0-9]{0,4}\b/i;
-const LOG_REQUEST_ID_REGEX = /^([a-f0-9]{8}|--------)$/i;
-const LOG_TIME_OF_DAY_REGEX = /^\d{1,2}:\d{2}:\d{2}(?:\.\d{1,3})?$/;
-const GIN_TIMESTAMP_SEGMENT_REGEX =
-  /^\[GIN\]\s+(\d{4})\/(\d{2})\/(\d{2})\s*-\s*(\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?)\s*$/;
-
-const HTTP_STATUS_PATTERNS: RegExp[] = [
-  /\|\s*([1-5]\d{2})\s*\|/,
-  /\b([1-5]\d{2})\s*-/,
-  new RegExp(`\\b(?:${HTTP_METHODS.join('|')})\\s+\\S+\\s+([1-5]\\d{2})\\b`),
-  /\b(?:status|code|http)[:\s]+([1-5]\d{2})\b/i,
-  /\b([1-5]\d{2})\s+(?:OK|Created|Accepted|No Content|Moved|Found|Bad Request|Unauthorized|Forbidden|Not Found|Method Not Allowed|Internal Server Error|Bad Gateway|Service Unavailable|Gateway Timeout)\b/i,
-];
-
-const detectHttpStatusCode = (text: string): number | undefined => {
-  for (const pattern of HTTP_STATUS_PATTERNS) {
-    const match = text.match(pattern);
-    if (!match) continue;
-    const code = Number.parseInt(match[1], 10);
-    if (!Number.isFinite(code)) continue;
-    if (code >= 100 && code <= 599) return code;
-  }
-  return undefined;
-};
-
-const extractIp = (text: string): string | undefined => {
-  const ipv4Match = text.match(LOG_IPV4_REGEX);
-  if (ipv4Match) return ipv4Match[0];
-
-  const ipv6Match = text.match(LOG_IPV6_REGEX);
-  if (!ipv6Match) return undefined;
-
-  const candidate = ipv6Match[0];
-
-  // Avoid treating time strings like "12:34:56" as IPv6 addresses.
-  if (LOG_TIME_OF_DAY_REGEX.test(candidate)) return undefined;
-
-  // If no compression marker is present, a valid IPv6 address must contain 8 hextets.
-  if (!candidate.includes('::') && candidate.split(':').length !== 8) return undefined;
-
-  return candidate;
-};
-
-const normalizeTimestampToSeconds = (value: string): string => {
-  const trimmed = value.trim();
-  const match = trimmed.match(/^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/);
-  if (!match) return trimmed;
-  return `${match[1]} ${match[2]}`;
-};
-
-const extractLatency = (text: string): string | undefined => {
-  const match = text.match(LOG_LATENCY_REGEX);
-  if (!match) return undefined;
-  return match[0].replace(/\s+/g, '');
-};
-
-type ParsedLogLine = {
-  raw: string;
-  timestamp?: string;
-  level?: LogLevel;
-  source?: string;
-  requestId?: string;
-  statusCode?: number;
-  latency?: string;
-  ip?: string;
-  method?: HttpMethod;
-  path?: string;
-  message: string;
-};
-
-const extractLogLevel = (value: string): LogLevel | undefined => {
-  const normalized = value.trim().toLowerCase();
-  if (normalized === 'warning') return 'warn';
-  if (normalized === 'warn') return 'warn';
-  if (normalized === 'info') return 'info';
-  if (normalized === 'error') return 'error';
-  if (normalized === 'fatal') return 'fatal';
-  if (normalized === 'debug') return 'debug';
-  if (normalized === 'trace') return 'trace';
-  return undefined;
-};
-
-const inferLogLevel = (line: string): LogLevel | undefined => {
-  const lowered = line.toLowerCase();
-  if (/\bfatal\b/.test(lowered)) return 'fatal';
-  if (/\berror\b/.test(lowered)) return 'error';
-  if (/\bwarn(?:ing)?\b/.test(lowered) || line.includes('警告')) return 'warn';
-  if (/\binfo\b/.test(lowered)) return 'info';
-  if (/\bdebug\b/.test(lowered)) return 'debug';
-  if (/\btrace\b/.test(lowered)) return 'trace';
-  return undefined;
-};
-
-const extractHttpMethodAndPath = (text: string): { method?: HttpMethod; path?: string } => {
-  const match = text.match(HTTP_METHOD_REGEX);
-  if (!match) return {};
-
-  const method = match[1] as HttpMethod;
-  const index = match.index ?? 0;
-  const after = text.slice(index + match[0].length).trim();
-  const path = after ? after.split(/\s+/)[0] : undefined;
-  return { method, path };
-};
-
-const parseLogLine = (raw: string): ParsedLogLine => {
-  let remaining = raw.trim();
-
-  let timestamp: string | undefined;
-  const tsMatch = remaining.match(LOG_TIMESTAMP_REGEX);
-  if (tsMatch) {
-    timestamp = tsMatch[1];
-    remaining = remaining.slice(tsMatch[0].length).trim();
-  }
-
-  let requestId: string | undefined;
-  const requestIdMatch = remaining.match(/^\[([a-f0-9]{8}|--------)\]\s*/i);
-  if (requestIdMatch) {
-    const id = requestIdMatch[1];
-    if (!/^-+$/.test(id)) {
-      requestId = id;
-    }
-    remaining = remaining.slice(requestIdMatch[0].length).trim();
-  }
-
-  let level: LogLevel | undefined;
-  const lvlMatch = remaining.match(LOG_LEVEL_REGEX);
-  if (lvlMatch) {
-    level = extractLogLevel(lvlMatch[1]);
-    remaining = remaining.slice(lvlMatch[0].length).trim();
-  }
-
-  let source: string | undefined;
-  const sourceMatch = remaining.match(LOG_SOURCE_REGEX);
-  if (sourceMatch) {
-    source = sourceMatch[1];
-    remaining = remaining.slice(sourceMatch[0].length).trim();
-  }
-
-  let statusCode: number | undefined;
-  let latency: string | undefined;
-  let ip: string | undefined;
-  let method: HttpMethod | undefined;
-  let path: string | undefined;
-  let message = remaining;
-
-  if (remaining.includes('|')) {
-    const segments = remaining
-      .split('|')
-      .map((segment) => segment.trim())
-      .filter(Boolean);
-    const consumed = new Set<number>();
-
-    const ginIndex = segments.findIndex((segment) => GIN_TIMESTAMP_SEGMENT_REGEX.test(segment));
-    if (ginIndex >= 0) {
-      const match = segments[ginIndex].match(GIN_TIMESTAMP_SEGMENT_REGEX);
-      if (match) {
-        const ginTimestamp = `${match[1]}-${match[2]}-${match[3]} ${match[4]}`;
-        const normalizedGin = normalizeTimestampToSeconds(ginTimestamp);
-        const normalizedParsed = timestamp ? normalizeTimestampToSeconds(timestamp) : undefined;
-
-        if (!timestamp) {
-          timestamp = ginTimestamp;
-          consumed.add(ginIndex);
-        } else if (normalizedParsed === normalizedGin) {
-          consumed.add(ginIndex);
-        }
-      }
-    }
-
-    // request id (8-char hex or dashes)
-    const requestIdIndex = segments.findIndex((segment) => LOG_REQUEST_ID_REGEX.test(segment));
-    if (requestIdIndex >= 0) {
-      const match = segments[requestIdIndex].match(LOG_REQUEST_ID_REGEX);
-      if (match) {
-        const id = match[1];
-        if (!/^-+$/.test(id)) {
-          requestId = id;
-        }
-        consumed.add(requestIdIndex);
-      }
-    }
-
-    // status code
-    const statusIndex = segments.findIndex((segment) => /^\d{3}$/.test(segment));
-    if (statusIndex >= 0) {
-      const match = segments[statusIndex].match(/^(\d{3})$/);
-      if (match) {
-        const code = Number.parseInt(match[1], 10);
-        if (code >= 100 && code <= 599) {
-          statusCode = code;
-          consumed.add(statusIndex);
-        }
-      }
-    }
-
-    // latency
-    const latencyIndex = segments.findIndex((segment) => LOG_LATENCY_REGEX.test(segment));
-    if (latencyIndex >= 0) {
-      const extracted = extractLatency(segments[latencyIndex]);
-      if (extracted) {
-        latency = extracted;
-        consumed.add(latencyIndex);
-      }
-    }
-
-    // ip
-    const ipIndex = segments.findIndex((segment) => Boolean(extractIp(segment)));
-    if (ipIndex >= 0) {
-      const extracted = extractIp(segments[ipIndex]);
-      if (extracted) {
-        ip = extracted;
-        consumed.add(ipIndex);
-      }
-    }
-
-    // method + path
-    const methodIndex = segments.findIndex((segment) => {
-      const { method: parsedMethod } = extractHttpMethodAndPath(segment);
-      return Boolean(parsedMethod);
-    });
-    if (methodIndex >= 0) {
-      const parsed = extractHttpMethodAndPath(segments[methodIndex]);
-      method = parsed.method;
-      path = parsed.path;
-      consumed.add(methodIndex);
-    }
-
-    // source (e.g. [gin_logger.go:94])
-    const sourceIndex = segments.findIndex((segment) => LOG_SOURCE_REGEX.test(segment));
-    if (sourceIndex >= 0) {
-      const match = segments[sourceIndex].match(LOG_SOURCE_REGEX);
-      if (match) {
-        source = match[1];
-        consumed.add(sourceIndex);
-      }
-    }
-
-    message = segments.filter((_, index) => !consumed.has(index)).join(' | ');
-  } else {
-    statusCode = detectHttpStatusCode(remaining);
-
-    const extracted = extractLatency(remaining);
-    if (extracted) latency = extracted;
-
-    ip = extractIp(remaining);
-
-    const parsed = extractHttpMethodAndPath(remaining);
-    method = parsed.method;
-    path = parsed.path;
-  }
-
-  if (!level) level = inferLogLevel(raw);
-
-  if (message) {
-    const match = message.match(GIN_TIMESTAMP_SEGMENT_REGEX);
-    if (match) {
-      const ginTimestamp = `${match[1]}-${match[2]}-${match[3]} ${match[4]}`;
-      if (!timestamp) timestamp = ginTimestamp;
-      if (normalizeTimestampToSeconds(timestamp) === normalizeTimestampToSeconds(ginTimestamp)) {
-        message = '';
-      }
-    }
-  }
-
-  return {
-    raw,
-    timestamp,
-    level,
-    source,
-    requestId,
-    statusCode,
-    latency,
-    ip,
-    method,
-    path,
-    message,
-  };
-};
 
 const getErrorMessage = (err: unknown): string => {
   if (err instanceof Error) return err.message;
@@ -344,37 +58,17 @@ const getErrorMessage = (err: unknown): string => {
   return typeof message === 'string' ? message : '';
 };
 
-const copyToClipboard = async (text: string) => {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    try {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      textarea.style.left = '-9999px';
-      textarea.style.top = '0';
-      document.body.appendChild(textarea);
-      textarea.focus();
-      textarea.select();
-      const ok = document.execCommand('copy');
-      document.body.removeChild(textarea);
-      return ok;
-    } catch {
-      return false;
-    }
-  }
-};
-
 type TabType = 'logs' | 'errors';
 
 export function LogsPage() {
   const { t } = useTranslation();
   const { showNotification, showConfirmation } = useNotificationStore();
   const connectionStatus = useAuthStore((state) => state.connectionStatus);
-  const requestLogEnabled = useConfigStore((state) => state.config?.requestLog ?? false);
+  const apiBase = useAuthStore((state) => state.apiBase);
+  const managementKey = useAuthStore((state) => state.managementKey);
+  const traceScopeKey = `${apiBase}::${managementKey}`;
+  const config = useConfigStore((state) => state.config);
+  const requestLogEnabled = config?.requestLog ?? false;
 
   const [activeTab, setActiveTab] = useState<TabType>('logs');
   const [logState, setLogState] = useState<LogState>({ buffer: [], visibleFrom: 0 });
@@ -391,32 +85,27 @@ export function LogsPage() {
   const [requestLogId, setRequestLogId] = useState<string | null>(null);
   const [requestLogDownloading, setRequestLogDownloading] = useState(false);
 
-  const logViewerRef = useRef<HTMLDivElement | null>(null);
-  const pendingScrollToBottomRef = useRef(false);
-  const pendingPrependScrollRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  const trace = useTraceResolver({
+    traceScopeKey,
+    connectionStatus,
+    config,
+    requestLogDownloading
+  });
+
+  const logScrollerRef = useRef<ReturnType<typeof useLogScroller> | null>(null);
   const longPressRef = useRef<{
     timer: number | null;
     startX: number;
     startY: number;
     fired: boolean;
   } | null>(null);
+  const logRequestInFlightRef = useRef(false);
+  const pendingFullReloadRef = useRef(false);
 
   // 保存最新时间戳用于增量获取
   const latestTimestampRef = useRef<number>(0);
 
   const disableControls = connectionStatus !== 'connected';
-
-  const isNearBottom = (node: HTMLDivElement | null) => {
-    if (!node) return true;
-    const threshold = 24;
-    return node.scrollHeight - node.scrollTop - node.clientHeight <= threshold;
-  };
-
-  const scrollToBottom = () => {
-    const node = logViewerRef.current;
-    if (!node) return;
-    node.scrollTop = node.scrollHeight;
-  };
 
   const loadLogs = async (incremental = false) => {
     if (connectionStatus !== 'connected') {
@@ -424,13 +113,27 @@ export function LogsPage() {
       return;
     }
 
+    if (logRequestInFlightRef.current) {
+      if (!incremental) {
+        pendingFullReloadRef.current = true;
+      }
+      return;
+    }
+
+    logRequestInFlightRef.current = true;
+
     if (!incremental) {
       setLoading(true);
     }
     setError('');
 
     try {
-      pendingScrollToBottomRef.current = !incremental || isNearBottom(logViewerRef.current);
+      const scrollerInstance = logScrollerRef.current;
+      const stickToBottom =
+        !incremental || isNearBottom(scrollerInstance?.logViewerRef.current ?? null);
+      if (stickToBottom) {
+        scrollerInstance?.requestScrollToBottom();
+      }
 
       const params =
         incremental && latestTimestampRef.current > 0 ? { after: latestTimestampRef.current } : {};
@@ -453,7 +156,7 @@ export function LogsPage() {
           let visibleFrom = Math.max(prev.visibleFrom - dropCount, 0);
 
           // 若用户停留在底部（跟随最新日志），则保持“渲染窗口”大小不变，避免无限增长
-          if (pendingScrollToBottomRef.current) {
+          if (stickToBottom) {
             visibleFrom = Math.max(buffer.length - prevRenderedCount, 0);
           }
 
@@ -473,6 +176,11 @@ export function LogsPage() {
     } finally {
       if (!incremental) {
         setLoading(false);
+      }
+      logRequestInFlightRef.current = false;
+      if (pendingFullReloadRef.current) {
+        pendingFullReloadRef.current = false;
+        void loadLogs(false);
       }
     }
   };
@@ -504,13 +212,7 @@ export function LogsPage() {
 
   const downloadLogs = () => {
     const text = logState.buffer.join('\n');
-    const blob = new Blob([text], { type: 'text/plain' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'logs.txt';
-    a.click();
-    window.URL.revokeObjectURL(url);
+    downloadBlob({ filename: 'logs.txt', blob: new Blob([text], { type: 'text/plain' }) });
     showNotification(t('logs.download_success'), 'success');
   };
 
@@ -541,13 +243,7 @@ export function LogsPage() {
   const downloadErrorLog = async (name: string) => {
     try {
       const response = await logsApi.downloadErrorLog(name);
-      const blob = new Blob([response.data], { type: 'text/plain' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = name;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      downloadBlob({ filename: name, blob: new Blob([response.data], { type: 'text/plain' }) });
       showNotification(t('logs.error_log_download_success'), 'success');
     } catch (err: unknown) {
       const message = getErrorMessage(err);
@@ -584,15 +280,6 @@ export function LogsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoRefresh, connectionStatus]);
 
-  useEffect(() => {
-    if (!pendingScrollToBottomRef.current) return;
-    if (loading) return;
-    if (!logViewerRef.current) return;
-
-    scrollToBottom();
-    pendingScrollToBottomRef.current = false;
-  }, [loading, logState.buffer, logState.visibleFrom]);
-
   const visibleLines = useMemo(
     () => logState.buffer.slice(logState.visibleFrom),
     [logState.buffer, logState.visibleFrom]
@@ -602,74 +289,78 @@ export function LogsPage() {
   const isSearching = trimmedSearchQuery.length > 0;
   const baseLines = isSearching ? logState.buffer : visibleLines;
 
-  const { filteredLines, removedCount } = useMemo(() => {
+  const parsedSearchLines = useMemo(() => {
     let working = baseLines;
-    let removed = 0;
 
     if (hideManagementLogs) {
-      const next: string[] = [];
-      for (const line of working) {
-        if (line.includes(MANAGEMENT_API_PREFIX)) {
-          removed += 1;
-        } else {
-          next.push(line);
-        }
-      }
-      working = next;
+      working = working.filter((line) => !line.includes(MANAGEMENT_API_PREFIX));
     }
 
     if (trimmedSearchQuery) {
       const queryLowered = trimmedSearchQuery.toLowerCase();
-      const next: string[] = [];
-      for (const line of working) {
-        if (line.toLowerCase().includes(queryLowered)) {
-          next.push(line);
-        } else {
-          removed += 1;
-        }
-      }
-      working = next;
+      working = working.filter((line) => line.toLowerCase().includes(queryLowered));
     }
 
-    return { filteredLines: working, removedCount: removed };
+    return working.map((line) => parseLogLine(line));
   }, [baseLines, hideManagementLogs, trimmedSearchQuery]);
 
-  const parsedVisibleLines = useMemo(() => {
-    if (showRawLogs) return [];
-    return filteredLines.map((line) => parseLogLine(line));
-  }, [filteredLines, showRawLogs]);
+  const filters = useLogFilters({ parsedLines: parsedSearchLines });
+
+  const { filteredParsedLines, filteredLines, removedCount } = useMemo(() => {
+    const filteredParsed = parsedSearchLines.filter((line) => {
+      if (
+        filters.methodFilterSet.size > 0 &&
+        (!line.method || !filters.methodFilterSet.has(line.method))
+      ) {
+        return false;
+      }
+
+      const statusGroup = resolveStatusGroup(line.statusCode);
+      if (
+        filters.statusFilterSet.size > 0 &&
+        (!statusGroup || !filters.statusFilterSet.has(statusGroup))
+      ) {
+        return false;
+      }
+
+      if (filters.pathFilterSet.size > 0 && (!line.path || !filters.pathFilterSet.has(line.path))) {
+        return false;
+      }
+
+      return true;
+    });
+
+    return {
+      filteredParsedLines: filteredParsed,
+      filteredLines: filteredParsed.map((line) => line.raw),
+      removedCount: Math.max(baseLines.length - filteredParsed.length, 0)
+    };
+  }, [
+    baseLines,
+    filters.methodFilterSet,
+    filters.pathFilterSet,
+    filters.statusFilterSet,
+    parsedSearchLines
+  ]);
+
+  const parsedVisibleLines = useMemo(
+    () => (showRawLogs ? [] : filteredParsedLines),
+    [filteredParsedLines, showRawLogs]
+  );
 
   const rawVisibleText = useMemo(() => filteredLines.join('\n'), [filteredLines]);
 
-  const canLoadMore = !isSearching && logState.visibleFrom > 0;
+  const scroller = useLogScroller({
+    logState,
+    setLogState,
+    loading,
+    isSearching,
+    filteredLineCount: filteredLines.length,
+    hasStructuredFilters: filters.hasStructuredFilters,
+    showRawLogs
+  });
 
-  const handleLogScroll = () => {
-    const node = logViewerRef.current;
-    if (!node) return;
-    if (isSearching) return;
-    if (!canLoadMore) return;
-    if (pendingPrependScrollRef.current) return;
-    if (node.scrollTop > LOAD_MORE_THRESHOLD_PX) return;
-
-    pendingPrependScrollRef.current = {
-      scrollHeight: node.scrollHeight,
-      scrollTop: node.scrollTop,
-    };
-    setLogState((prev) => ({
-      ...prev,
-      visibleFrom: Math.max(prev.visibleFrom - LOAD_MORE_LINES, 0),
-    }));
-  };
-
-  useLayoutEffect(() => {
-    const node = logViewerRef.current;
-    const pending = pendingPrependScrollRef.current;
-    if (!node || !pending) return;
-
-    const delta = node.scrollHeight - pending.scrollHeight;
-    node.scrollTop = pending.scrollTop + delta;
-    pendingPrependScrollRef.current = null;
-  }, [logState.visibleFrom]);
+  logScrollerRef.current = scroller;
 
   const copyLogLine = async (raw: string) => {
     const ok = await copyToClipboard(raw);
@@ -730,13 +421,10 @@ export function LogsPage() {
     setRequestLogDownloading(true);
     try {
       const response = await logsApi.downloadRequestLogById(id);
-      const blob = new Blob([response.data], { type: 'text/plain' });
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `request-${id}.log`;
-      a.click();
-      window.URL.revokeObjectURL(url);
+      downloadBlob({
+        filename: `request-${id}.log`,
+        blob: new Blob([response.data], { type: 'text/plain' })
+      });
       showNotification(t('logs.request_log_download_success'), 'success');
       setRequestLogId(null);
     } catch (err: unknown) {
@@ -808,6 +496,86 @@ export function LogsPage() {
                     )
                   }
                 />
+              </div>
+
+              <div className={styles.structuredFilters}>
+                <div className={styles.filterChipGroup}>
+                  <span className={styles.filterChipLabel}>{t('logs.filter_method')}</span>
+                  <div className={styles.filterChipList}>
+                    {HTTP_METHODS.map((method) => {
+                      const active = filters.methodFilters.includes(method);
+                      const count = filters.methodCounts[method] ?? 0;
+                      return (
+                        <button
+                          key={method}
+                          type="button"
+                          className={`${styles.filterChip} ${active ? styles.filterChipActive : ''}`}
+                          onClick={() => filters.toggleMethodFilter(method)}
+                          disabled={count === 0 && !active}
+                          aria-pressed={active}
+                        >
+                          {method} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className={styles.filterChipGroup}>
+                  <span className={styles.filterChipLabel}>{t('logs.filter_status')}</span>
+                  <div className={styles.filterChipList}>
+                    {STATUS_GROUPS.map((statusGroup) => {
+                      const active = filters.statusFilters.includes(statusGroup);
+                      const count = filters.statusCounts[statusGroup] ?? 0;
+                      return (
+                        <button
+                          key={statusGroup}
+                          type="button"
+                          className={`${styles.filterChip} ${active ? styles.filterChipActive : ''}`}
+                          onClick={() => filters.toggleStatusFilter(statusGroup)}
+                          disabled={count === 0 && !active}
+                          aria-pressed={active}
+                        >
+                          {t(`logs.filter_status_${statusGroup}`)} ({count})
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className={styles.filterChipGroup}>
+                  <span className={styles.filterChipLabel}>{t('logs.filter_path')}</span>
+                  <div className={styles.filterChipList}>
+                    {filters.pathOptions.length === 0 ? (
+                      <span className={styles.filterChipHint}>{t('logs.filter_path_empty')}</span>
+                    ) : (
+                      filters.pathOptions.map(({ path, count }) => {
+                        const active = filters.pathFilters.includes(path);
+                        return (
+                          <button
+                            key={path}
+                            type="button"
+                            className={`${styles.filterChip} ${active ? styles.filterChipActive : ''}`}
+                            onClick={() => filters.togglePathFilter(path)}
+                            aria-pressed={active}
+                            title={path}
+                          >
+                            {path} ({count})
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={filters.clearStructuredFilters}
+                  disabled={!filters.hasStructuredFilters}
+                >
+                  {t('logs.clear_filters')}
+                </Button>
               </div>
 
               <ToggleSwitch
@@ -891,8 +659,12 @@ export function LogsPage() {
             {loading ? (
               <div className="hint">{t('logs.loading')}</div>
             ) : logState.buffer.length > 0 && filteredLines.length > 0 ? (
-              <div ref={logViewerRef} className={styles.logPanel} onScroll={handleLogScroll}>
-                {canLoadMore && (
+              <div
+                ref={scroller.logViewerRef}
+                className={styles.logPanel}
+                onScroll={scroller.handleLogScroll}
+              >
+                {scroller.canLoadMore && (
                   <div className={styles.loadMoreBanner}>
                     <span>{t('logs.load_more_hint')}</span>
                     <div className={styles.loadMoreStats}>
@@ -917,6 +689,7 @@ export function LogsPage() {
                 ) : (
                   <div className={styles.logList}>
                     {parsedVisibleLines.map((line, index) => {
+                      const canTraceRequest = isTraceableRequestPath(line.path);
                       const rowClassNames = [styles.logRow];
                       if (line.level === 'warn') rowClassNames.push(styles.rowWarn);
                       if (line.level === 'error' || line.level === 'fatal')
@@ -1007,6 +780,21 @@ export function LogsPage() {
                             )}
 
                             {line.message && <span className={styles.message}>{line.message}</span>}
+
+                            {canTraceRequest && (
+                              <button
+                                type="button"
+                                className={styles.traceButton}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  cancelLongPress();
+                                  trace.openTraceModal(line);
+                                }}
+                                title={t('logs.trace_button')}
+                              >
+                                {t('logs.trace_button')}
+                              </button>
+                            )}
                           </div>
                         </div>
                       );
@@ -1085,6 +873,174 @@ export function LogsPage() {
           </Card>
         )}
       </div>
+
+      <Modal
+        open={Boolean(trace.traceLogLine)}
+        onClose={trace.closeTraceModal}
+        title={t('logs.trace_title')}
+        footer={
+          <>
+            {trace.traceLogLine?.requestId && (
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  if (trace.traceLogLine?.requestId) {
+                    void downloadRequestLog(trace.traceLogLine.requestId);
+                  }
+                }}
+                loading={requestLogDownloading}
+              >
+                {t('logs.trace_download_request_log')}
+              </Button>
+            )}
+            <Button
+              variant="secondary"
+              onClick={trace.closeTraceModal}
+              disabled={requestLogDownloading}
+            >
+              {t('common.close')}
+            </Button>
+          </>
+        }
+      >
+        {trace.traceLogLine && (
+          <div className={styles.tracePanel}>
+            <div className={styles.traceNotice}>{t('logs.trace_notice')}</div>
+
+            <h3 className={styles.traceSectionTitle}>{t('logs.trace_log_info')}</h3>
+            <div className={styles.traceInfoGrid}>
+              <div className={styles.traceInfoItem}>
+                <span className={styles.traceInfoLabel}>{t('logs.trace_request_id')}</span>
+                <span className={styles.traceInfoValue}>{trace.traceLogLine.requestId || '-'}</span>
+              </div>
+              <div className={styles.traceInfoItem}>
+                <span className={styles.traceInfoLabel}>{t('logs.trace_method')}</span>
+                <span className={styles.traceInfoValue}>{trace.traceLogLine.method || '-'}</span>
+              </div>
+              <div className={styles.traceInfoItem}>
+                <span className={styles.traceInfoLabel}>{t('logs.trace_path')}</span>
+                <span className={styles.traceInfoValue}>{trace.traceLogLine.path || '-'}</span>
+              </div>
+              <div className={styles.traceInfoItem}>
+                <span className={styles.traceInfoLabel}>{t('logs.trace_status_code')}</span>
+                <span className={styles.traceInfoValue}>
+                  {typeof trace.traceLogLine.statusCode === 'number'
+                    ? trace.traceLogLine.statusCode
+                    : '-'}
+                </span>
+              </div>
+              <div className={styles.traceInfoItem}>
+                <span className={styles.traceInfoLabel}>{t('logs.trace_latency')}</span>
+                <span className={styles.traceInfoValue}>{trace.traceLogLine.latency || '-'}</span>
+              </div>
+              <div className={styles.traceInfoItem}>
+                <span className={styles.traceInfoLabel}>{t('logs.trace_ip')}</span>
+                <span className={styles.traceInfoValue}>{trace.traceLogLine.ip || '-'}</span>
+              </div>
+              <div className={styles.traceInfoItem}>
+                <span className={styles.traceInfoLabel}>{t('logs.trace_timestamp')}</span>
+                <span className={styles.traceInfoValue}>{trace.traceLogLine.timestamp || '-'}</span>
+              </div>
+              <div className={`${styles.traceInfoItem} ${styles.traceInfoItemWide}`}>
+                <span className={styles.traceInfoLabel}>{t('logs.trace_message')}</span>
+                <span className={styles.traceInfoValue}>{trace.traceLogLine.message || '-'}</span>
+              </div>
+            </div>
+
+            <div className={styles.traceCandidatesHeader}>
+              <h3 className={styles.traceSectionTitle}>{t('logs.trace_candidates_title')}</h3>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  void trace.refreshTraceUsageDetails().catch(() => {});
+                }}
+                loading={trace.traceLoading}
+                disabled={requestLogDownloading}
+              >
+                {t('common.refresh')}
+              </Button>
+            </div>
+            {trace.traceLoading ? (
+              <div className="hint">{t('logs.trace_loading')}</div>
+            ) : trace.traceError ? (
+              <div className="error-box">{trace.traceError}</div>
+            ) : trace.traceCandidates.length === 0 ? (
+              <div className="hint">{t('logs.trace_no_match')}</div>
+            ) : (
+              <div className={styles.traceCandidates}>
+                {trace.traceCandidates.map((candidate) => {
+                  const sourceInfo = trace.resolveTraceSourceInfo(
+                    String(candidate.detail.source ?? ''),
+                    candidate.detail.auth_index
+                  );
+                  return (
+                    <div
+                      key={`${candidate.detail.__endpoint}-${candidate.detail.__modelName}-${candidate.detail.timestamp}-${candidate.detail.source}`}
+                      className={styles.traceCandidate}
+                    >
+                      <div className={styles.traceCandidateHeader}>
+                        {candidate.modelMatched && (
+                          <span className={styles.traceModelBadge}>
+                            {t('logs.trace_model_matched')}
+                          </span>
+                        )}
+                        {candidate.timeDeltaMs !== null && (
+                          <span className={styles.traceDelta}>
+                            {t('logs.trace_delta_seconds', {
+                              seconds: (candidate.timeDeltaMs / 1000).toFixed(2)
+                            })}
+                          </span>
+                        )}
+                      </div>
+                      <div className={styles.traceCandidateGrid}>
+                        <div className={styles.traceInfoItem}>
+                          <span className={styles.traceInfoLabel}>{t('logs.trace_endpoint')}</span>
+                          <span className={styles.traceInfoValue}>{candidate.detail.__endpoint}</span>
+                        </div>
+                        <div className={styles.traceInfoItem}>
+                          <span className={styles.traceInfoLabel}>{t('logs.trace_model')}</span>
+                          <span className={styles.traceInfoValue}>{candidate.detail.__modelName || '-'}</span>
+                        </div>
+                        <div className={styles.traceInfoItem}>
+                          <span className={styles.traceInfoLabel}>{t('logs.trace_source')}</span>
+                          <span
+                            className={styles.traceInfoValue}
+                            title={String(candidate.detail.source || '-')}
+                          >
+                            <span>{sourceInfo.displayName}</span>
+                            {sourceInfo.type && (
+                              <span className={styles.traceSourceType}>{sourceInfo.type}</span>
+                            )}
+                          </span>
+                        </div>
+                        <div className={styles.traceInfoItem}>
+                          <span className={styles.traceInfoLabel}>{t('logs.trace_auth_index')}</span>
+                          <span className={styles.traceInfoValue}>
+                            {candidate.detail.auth_index ?? '-'}
+                          </span>
+                        </div>
+                        <div className={styles.traceInfoItem}>
+                          <span className={styles.traceInfoLabel}>{t('logs.trace_timestamp')}</span>
+                          <span className={styles.traceInfoValue}>
+                            {candidate.detail.timestamp || '-'}
+                          </span>
+                        </div>
+                        <div className={styles.traceInfoItem}>
+                          <span className={styles.traceInfoLabel}>{t('logs.trace_result')}</span>
+                          <span className={styles.traceInfoValue}>
+                            {candidate.detail.failed ? t('stats.failure') : t('stats.success')}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
 
       <Modal
         open={Boolean(requestLogId)}
