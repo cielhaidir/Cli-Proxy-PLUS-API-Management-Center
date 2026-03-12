@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -21,7 +29,7 @@ import {
   isRuntimeOnlyAuthFile,
   normalizeProviderKey,
   type QuotaProviderType,
-  type ResolvedTheme
+  type ResolvedTheme,
 } from '@/features/authFiles/constants';
 import { AuthFileCard } from '@/features/authFiles/components/AuthFileCard';
 import { AuthFileDetailModal } from '@/features/authFiles/components/AuthFileDetailModal';
@@ -56,7 +64,7 @@ export function AuthFilesPage() {
   const [pageSizeInput, setPageSizeInput] = useState('9');
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [selectedFile, setSelectedFile] = useState<AuthFileItem | null>(null);
-  const [viewMode, setViewMode] = useState<'diagram' | 'list'>('list');
+  const [viewMode, setViewMode] = useState<'diagram' | 'list' | 'models'>('list');
   const [batchActionBarVisible, setBatchActionBarVisible] = useState(false);
   const floatingBatchActionsRef = useRef<HTMLDivElement>(null);
   const previousSelectionCountRef = useRef(0);
@@ -85,7 +93,7 @@ export function AuthFilesPage() {
     selectAllVisible,
     deselectAll,
     batchSetStatus,
-    batchDelete
+    batchDelete,
   } = useAuthFilesData({ refreshKeyStats });
 
   const statusBarCache = useAuthFilesStatusBarCache(files, usageDetails);
@@ -101,10 +109,11 @@ export function AuthFilesPage() {
     deleteExcluded,
     deleteModelAlias,
     handleMappingUpdate,
+    handleBulkMappingUpdate,
     handleDeleteLink,
     handleToggleFork,
     handleRenameAlias,
-    handleDeleteAlias
+    handleDeleteAlias,
   } = useAuthFilesOauth({ viewMode, files });
 
   const {
@@ -115,7 +124,7 @@ export function AuthFilesPage() {
     modelsFileType,
     modelsError,
     showModels,
-    closeModelsModal
+    closeModelsModal,
   } = useAuthFilesModels();
 
   const {
@@ -125,11 +134,11 @@ export function AuthFilesPage() {
     openPrefixProxyEditor,
     closePrefixProxyEditor,
     handlePrefixProxyChange,
-    handlePrefixProxySave
+    handlePrefixProxySave,
   } = useAuthFilesPrefixProxyEditor({
     disableControls: connectionStatus !== 'connected',
     loadFiles,
-    loadKeyStats: refreshKeyStats
+    loadKeyStats: refreshKeyStats,
   });
 
   const disableControls = connectionStatus !== 'connected';
@@ -292,7 +301,7 @@ export function AuthFilesPage() {
       }
       const nextSearch = params.toString();
       navigate(`/auth-files/oauth-excluded${nextSearch ? `?${nextSearch}` : ''}`, {
-        state: { fromAuthFiles: true }
+        state: { fromAuthFiles: true },
       });
     },
     [filter, navigate]
@@ -307,7 +316,7 @@ export function AuthFilesPage() {
       }
       const nextSearch = params.toString();
       navigate(`/auth-files/oauth-model-alias${nextSearch ? `?${nextSearch}` : ''}`, {
-        state: { fromAuthFiles: true }
+        state: { fromAuthFiles: true },
       });
     },
     [filter, navigate]
@@ -372,7 +381,7 @@ export function AuthFilesPage() {
           if (selectionCountRef.current === 0) {
             setBatchActionBarVisible(false);
           }
-        }
+        },
       });
     }
 
@@ -395,7 +404,7 @@ export function AuthFilesPage() {
             style={{
               backgroundColor: isActive ? color.text : color.bg,
               color: isActive ? activeTextColor : color.text,
-              borderColor: color.text
+              borderColor: color.text,
             }}
             onClick={() => {
               setFilter(type);
@@ -442,7 +451,9 @@ export function AuthFilesPage() {
             <Button
               variant="danger"
               size="sm"
-              onClick={() => handleDeleteAll({ filter, onResetFilterToAll: () => setFilter('all') })}
+              onClick={() =>
+                handleDeleteAll({ filter, onResetFilterToAll: () => setFilter('all') })
+              }
               disabled={disableControls || loading || deletingAll}
               loading={deletingAll}
             >
@@ -502,9 +513,14 @@ export function AuthFilesPage() {
         {loading ? (
           <div className={styles.hint}>{t('common.loading')}</div>
         ) : pageItems.length === 0 ? (
-          <EmptyState title={t('auth_files.search_empty_title')} description={t('auth_files.search_empty_desc')} />
+          <EmptyState
+            title={t('auth_files.search_empty_title')}
+            description={t('auth_files.search_empty_desc')}
+          />
         ) : (
-          <div className={`${styles.fileGrid} ${quotaFilterType ? styles.fileGridQuotaManaged : ''}`}>
+          <div
+            className={`${styles.fileGrid} ${quotaFilterType ? styles.fileGridQuotaManaged : ''}`}
+          >
             {pageItems.map((file) => (
               <AuthFileCard
                 key={file.name}
@@ -543,7 +559,7 @@ export function AuthFilesPage() {
               {t('auth_files.pagination_info', {
                 current: currentPage,
                 total: totalPages,
-                count: filtered.length
+                count: filtered.length,
               })}
             </div>
             <Button
@@ -578,6 +594,7 @@ export function AuthFilesPage() {
         modelAlias={modelAlias}
         allProviderModels={allProviderModels}
         onUpdate={handleMappingUpdate}
+        onBulkUpdate={handleBulkMappingUpdate}
         onDeleteLink={handleDeleteLink}
         onToggleFork={handleToggleFork}
         onRenameAlias={handleRenameAlias}

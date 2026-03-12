@@ -7,7 +7,12 @@ import type { AuthFileModelItem } from '@/features/authFiles/constants';
 import { normalizeProviderKey } from '@/features/authFiles/constants';
 
 type UnsupportedError = 'unsupported' | null;
-type ViewMode = 'diagram' | 'list';
+type ViewMode = 'diagram' | 'list' | 'models';
+
+type BulkMappingItem = {
+  provider: string;
+  sourceModel: string;
+};
 
 export type UseAuthFilesOauthResult = {
   excluded: Record<string, string[]>;
@@ -21,6 +26,7 @@ export type UseAuthFilesOauthResult = {
   deleteExcluded: (provider: string) => void;
   deleteModelAlias: (provider: string) => void;
   handleMappingUpdate: (provider: string, sourceModel: string, newAlias: string) => Promise<void>;
+  handleBulkMappingUpdate: (items: BulkMappingItem[], newAlias: string) => Promise<void>;
   handleDeleteLink: (provider: string, sourceModel: string, alias: string) => void;
   handleToggleFork: (
     provider: string,
@@ -75,7 +81,7 @@ export function useAuthFilesOauth(options: UseAuthFilesOauthOptions): UseAuthFil
   }, [files, modelAlias]);
 
   useEffect(() => {
-    if (viewMode !== 'diagram') return;
+    if (viewMode !== 'diagram' && viewMode !== 'models') return;
 
     let cancelled = false;
 
@@ -204,7 +210,7 @@ export function useAuthFilesOauth(options: UseAuthFilesOauthOptions): UseAuthFil
               showNotification(`${t('oauth_excluded.delete_failed')}: ${errorMessage}`, 'error');
             }
           }
-        }
+        },
       });
     },
     [loadExcluded, showConfirmation, showNotification, t]
@@ -226,7 +232,7 @@ export function useAuthFilesOauth(options: UseAuthFilesOauthOptions): UseAuthFil
             const errorMessage = err instanceof Error ? err.message : '';
             showNotification(`${t('oauth_model_alias.delete_failed')}: ${errorMessage}`, 'error');
           }
-        }
+        },
       });
     },
     [loadModelAlias, showConfirmation, showNotification, t]
@@ -260,7 +266,7 @@ export function useAuthFilesOauth(options: UseAuthFilesOauthOptions): UseAuthFil
 
       const nextMappings: OAuthModelAliasEntry[] = [
         ...currentMappings,
-        { name: nameTrim, alias: aliasTrim, fork: true }
+        { name: nameTrim, alias: aliasTrim, fork: true },
       ];
 
       try {
@@ -319,10 +325,73 @@ export function useAuthFilesOauth(options: UseAuthFilesOauthOptions): UseAuthFil
             const errorMessage = err instanceof Error ? err.message : '';
             showNotification(`${t('oauth_model_alias.save_failed')}: ${errorMessage}`, 'error');
           }
-        }
+        },
       });
     },
     [loadModelAlias, modelAlias, showConfirmation, showNotification, t]
+  );
+
+  const handleBulkMappingUpdate = useCallback(
+    async (items: BulkMappingItem[], newAlias: string) => {
+      const aliasTrim = newAlias.trim();
+      if (!aliasTrim || items.length === 0) return;
+
+      const grouped = new Map<string, Set<string>>();
+      items.forEach((item) => {
+        const normalizedProvider = normalizeProviderKey(item.provider);
+        const sourceModel = item.sourceModel.trim();
+        if (!normalizedProvider || !sourceModel) return;
+        if (!grouped.has(normalizedProvider)) {
+          grouped.set(normalizedProvider, new Set());
+        }
+        grouped.get(normalizedProvider)?.add(sourceModel);
+      });
+
+      if (grouped.size === 0) return;
+
+      let hasChanges = false;
+
+      try {
+        await Promise.all(
+          Array.from(grouped.entries()).map(async ([normalizedProvider, sourceModels]) => {
+            const providerKey = Object.keys(modelAlias).find(
+              (key) => normalizeProviderKey(key) === normalizedProvider
+            );
+            const currentMappings = (providerKey ? modelAlias[providerKey] : null) ?? [];
+
+            const existingPairs = new Set(
+              currentMappings.map(
+                (mapping) =>
+                  `${(mapping.name ?? '').trim().toLowerCase()}::${(mapping.alias ?? '')
+                    .trim()
+                    .toLowerCase()}`
+              )
+            );
+
+            const nextMappings = [...currentMappings];
+            sourceModels.forEach((sourceModel) => {
+              const key = `${sourceModel.toLowerCase()}::${aliasTrim.toLowerCase()}`;
+              if (existingPairs.has(key)) return;
+              existingPairs.add(key);
+              nextMappings.push({ name: sourceModel, alias: aliasTrim, fork: true });
+              hasChanges = true;
+            });
+
+            if (nextMappings.length === currentMappings.length) return;
+            await authFilesApi.saveOauthModelAlias(normalizedProvider, nextMappings);
+          })
+        );
+
+        if (!hasChanges) return;
+
+        await loadModelAlias();
+        showNotification(t('oauth_model_alias.save_success'), 'success');
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : '';
+        showNotification(`${t('oauth_model_alias.save_failed')}: ${errorMessage}`, 'error');
+      }
+    },
+    [loadModelAlias, modelAlias, showNotification, t]
   );
 
   const handleToggleFork = useCallback(
@@ -477,7 +546,7 @@ export function useAuthFilesOauth(options: UseAuthFilesOauthOptions): UseAuthFil
           } else {
             showNotification(t('oauth_model_alias.delete_success'), 'success');
           }
-        }
+        },
       });
     },
     [loadModelAlias, modelAlias, showConfirmation, showNotification, t]
@@ -495,10 +564,10 @@ export function useAuthFilesOauth(options: UseAuthFilesOauthOptions): UseAuthFil
     deleteExcluded,
     deleteModelAlias,
     handleMappingUpdate,
+    handleBulkMappingUpdate,
     handleDeleteLink,
     handleToggleFork,
     handleRenameAlias,
-    handleDeleteAlias
+    handleDeleteAlias,
   };
 }
-
