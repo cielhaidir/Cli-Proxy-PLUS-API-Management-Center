@@ -11,6 +11,21 @@ import { useAuthStore, useNotificationStore } from '@/stores';
 import type { ModelPricingEntry } from '@/types';
 import styles from './BillingManagement.module.scss';
 
+const centsToDisplay = (value?: number) => {
+  const amount = Number(value ?? 0) / 100;
+  return amount.toFixed(2).replace('.', ',');
+};
+
+const parseDisplayToCents = (value: string) => {
+  const normalized = value.replace(/\./g, '').replace(',', '.').trim();
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    throw new Error('Format harga tidak valid');
+  }
+  return Math.round(parsed * 100);
+};
+
 const defaultForm: ModelPricingEntry = {
   model: '',
   currency: 'USD',
@@ -35,6 +50,11 @@ export function ModelPricingPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<ModelPricingEntry | null>(null);
   const [form, setForm] = useState<ModelPricingEntry>(defaultForm);
+  const [inputPriceText, setInputPriceText] = useState('0,00');
+  const [outputPriceText, setOutputPriceText] = useState('0,00');
+  const [reasoningPriceText, setReasoningPriceText] = useState('0,00');
+  const [cachedInputPriceText, setCachedInputPriceText] = useState('0,00');
+  const [requestPriceText, setRequestPriceText] = useState('0,00');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -71,12 +91,22 @@ export function ModelPricingPage() {
   const openCreate = () => {
     setEditing(null);
     setForm(defaultForm);
+    setInputPriceText(centsToDisplay(defaultForm.inputPrice));
+    setOutputPriceText(centsToDisplay(defaultForm.outputPrice));
+    setReasoningPriceText(centsToDisplay(defaultForm.reasoningPrice));
+    setCachedInputPriceText(centsToDisplay(defaultForm.cachedInputPrice));
+    setRequestPriceText(centsToDisplay(defaultForm.requestPrice));
     setModalOpen(true);
   };
 
   const openEdit = (item: ModelPricingEntry) => {
     setEditing(item);
     setForm({ ...defaultForm, ...item });
+    setInputPriceText(centsToDisplay(item.inputPrice));
+    setOutputPriceText(centsToDisplay(item.outputPrice));
+    setReasoningPriceText(centsToDisplay(item.reasoningPrice));
+    setCachedInputPriceText(centsToDisplay(item.cachedInputPrice));
+    setRequestPriceText(centsToDisplay(item.requestPrice));
     setModalOpen(true);
   };
 
@@ -92,11 +122,11 @@ export function ModelPricingPage() {
         model: form.model.trim(),
         currency: 'USD',
         pricingType: form.pricingType?.trim() || 'per_1m_tokens',
-        inputPrice: Number(form.inputPrice ?? 0),
-        outputPrice: Number(form.outputPrice ?? 0),
-        reasoningPrice: Number(form.reasoningPrice ?? 0),
-        cachedInputPrice: Number(form.cachedInputPrice ?? 0),
-        requestPrice: Number(form.requestPrice ?? 0),
+        inputPrice: parseDisplayToCents(inputPriceText),
+        outputPrice: parseDisplayToCents(outputPriceText),
+        reasoningPrice: parseDisplayToCents(reasoningPriceText),
+        cachedInputPrice: parseDisplayToCents(cachedInputPriceText),
+        requestPrice: parseDisplayToCents(requestPriceText),
       };
       if (editing) {
         await modelPricingApi.update({ match: editing.model, value: payload });
@@ -166,11 +196,11 @@ export function ModelPricingPage() {
                 {filteredItems.map((item) => (
                   <tr key={item.model}>
                     <td><div className={styles.keyCell}><span className={styles.keyName}>{item.model}</span><span className={styles.muted}>{item.pricingType || 'per_1m_tokens'} · {item.currency || 'USD'}</span></div></td>
-                    <td>{item.inputPrice ?? 0}</td>
-                    <td>{item.outputPrice ?? 0}</td>
-                    <td>{item.reasoningPrice ?? 0}</td>
-                    <td>{item.cachedInputPrice ?? 0}</td>
-                    <td>{item.requestPrice ?? 0}</td>
+                    <td>{centsToDisplay(item.inputPrice)}</td>
+                    <td>{centsToDisplay(item.outputPrice)}</td>
+                    <td>{centsToDisplay(item.reasoningPrice)}</td>
+                    <td>{centsToDisplay(item.cachedInputPrice)}</td>
+                    <td>{centsToDisplay(item.requestPrice)}</td>
                     <td><span className={`${styles.pill} ${item.enabled === false ? styles.pillDanger : styles.pillSuccess}`}>{item.enabled === false ? 'Disabled' : 'Enabled'}</span></td>
                     <td><div className={styles.rowActions}><Button variant="secondary" size="sm" onClick={() => openEdit(item)}>Edit</Button><Button variant="danger" size="sm" onClick={() => removeItem(item)}>Delete</Button></div></td>
                   </tr>
@@ -200,11 +230,11 @@ export function ModelPricingPage() {
           <Input label="Currency" value="USD" disabled />
           <Input label="Pricing Type" value={form.pricingType ?? 'per_1m_tokens'} onChange={(event) => setForm((current) => ({ ...current, pricingType: event.target.value }))} />
           <div className={styles.checkboxRow}><ToggleSwitch checked={form.enabled !== false} onChange={(checked) => setForm((current) => ({ ...current, enabled: checked }))} /><span>Enabled</span></div>
-          <Input label="Input Price" type="number" value={String(form.inputPrice ?? 0)} onChange={(event) => setForm((current) => ({ ...current, inputPrice: Number(event.target.value) }))} />
-          <Input label="Output Price" type="number" value={String(form.outputPrice ?? 0)} onChange={(event) => setForm((current) => ({ ...current, outputPrice: Number(event.target.value) }))} />
-          <Input label="Reasoning Price" type="number" value={String(form.reasoningPrice ?? 0)} onChange={(event) => setForm((current) => ({ ...current, reasoningPrice: Number(event.target.value) }))} />
-          <Input label="Cached Input Price" type="number" value={String(form.cachedInputPrice ?? 0)} onChange={(event) => setForm((current) => ({ ...current, cachedInputPrice: Number(event.target.value) }))} />
-          <Input label="Request Price" type="number" value={String(form.requestPrice ?? 0)} onChange={(event) => setForm((current) => ({ ...current, requestPrice: Number(event.target.value) }))} />
+          <Input label="Input Price ($/1M)" value={inputPriceText} onChange={(event) => setInputPriceText(event.target.value)} hint="Contoh: 2,50 untuk $2.50 per 1M token" />
+          <Input label="Output Price ($/1M)" value={outputPriceText} onChange={(event) => setOutputPriceText(event.target.value)} hint="Contoh: 15,00 untuk $15.00 per 1M token" />
+          <Input label="Reasoning Price ($/1M)" value={reasoningPriceText} onChange={(event) => setReasoningPriceText(event.target.value)} />
+          <Input label="Cached Input Price ($/1M)" value={cachedInputPriceText} onChange={(event) => setCachedInputPriceText(event.target.value)} />
+          <Input label="Request Price ($)" value={requestPriceText} onChange={(event) => setRequestPriceText(event.target.value)} />
         </div>
       </Modal>
     </div>
