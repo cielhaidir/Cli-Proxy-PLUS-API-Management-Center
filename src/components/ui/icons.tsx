@@ -266,6 +266,16 @@ export function IconTrendingUp({ size = 20, ...props }: IconProps) {
   );
 }
 
+export function IconWallet({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...baseSvgProps} width={size} height={size} {...props}>
+      <path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" />
+      <path d="M3 7h14a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H3" />
+      <path d="M16 12h.01" />
+    </svg>
+  );
+}
+
 export function IconDollarSign({ size = 20, ...props }: IconProps) {
   return (
     <svg {...baseSvgProps} width={size} height={size} {...props}>

@@ -1,0 +1,147 @@
+@use '../../styles/mixins' as *;
+
+.root {
+  position: relative;
+  width: 100%;
+}
+
+.trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba($primary-color, 0.18);
+  }
+
+  &:disabled {
+    opacity: 0.7;
+    cursor: not-allowed;
+  }
+}
+
+.placeholder {
+  color: var(--text-tertiary);
+}
+
+.triggerValue {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.icon {
+  display: inline-flex;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: $radius-lg;
+  box-shadow: var(--shadow-lg);
+  padding: 8px;
+  display: grid;
+  gap: 8px;
+}
+
+.searchInput {
+  width: 100%;
+}
+
+.options {
+  max-height: 240px;
+  overflow-y: auto;
+  display: grid;
+  gap: 4px;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: $radius-md;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+
+  &:hover {
+    background: var(--bg-secondary);
+  }
+}
+
+.optionActive {
+  border-color: rgba($primary-color, 0.5);
+  background: rgba($primary-color, 0.1);
+}
+
+.optionMeta {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.optionLabel {
+  font-weight: 600;
+}
+
+.optionDescription {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  font-size: 12px;
+}
+
+.chipRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.empty {
+  padding: 12px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}

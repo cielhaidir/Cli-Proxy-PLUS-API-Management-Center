@@ -13,3 +13,6 @@ export * from './version';
 export * from './models';
 export * from './transformers';
 export * from './vertex';
+export * from './clientApiKeys';
+export * from './modelPricing';
+export * from './billing';

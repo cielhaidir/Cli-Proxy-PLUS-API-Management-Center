@@ -23,6 +23,8 @@ import {
   IconShield,
   IconTimer,
   IconActivity,
+  IconKey,
+  IconWallet,
 } from '@/components/ui/icons';
 import { INLINE_LOGO_JPEG } from '@/assets/logoInline';
 import {
@@ -48,6 +50,8 @@ const sidebarIcons: Record<string, ReactNode> = {
   logs: <IconScrollText size={18} />,
   system: <IconInfo size={18} />,
   monitor: <IconActivity size={18} />,
+  clientApiKeys: <IconKey size={18} />,
+  billing: <IconWallet size={18} />,
 };
 
 // Header action icons - smaller size for header buttons
@@ -358,6 +362,9 @@ export function MainLayout() {
     { path: '/oauth', label: t('nav.oauth', { defaultValue: 'OAuth' }), icon: sidebarIcons.oauth },
     { path: '/quota', label: t('nav.quota_management'), icon: sidebarIcons.quota },
     { path: '/usage', label: t('nav.usage_stats'), icon: sidebarIcons.usage },
+    { path: '/client-api-keys', label: 'Client API Keys', icon: sidebarIcons.clientApiKeys },
+    { path: '/model-pricing', label: 'Model Pricing', icon: sidebarIcons.clientApiKeys },
+    { path: '/billing', label: 'Billing', icon: sidebarIcons.billing },
     ...(config?.loggingToFile
       ? [{ path: '/logs', label: t('nav.logs'), icon: sidebarIcons.logs }]
       : []),

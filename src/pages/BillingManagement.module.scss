@@ -1,0 +1,209 @@
+.container {
+  display: grid;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.titleBlock {
+  display: grid;
+  gap: 6px;
+}
+
+.pageTitle {
+  margin: 0;
+  font-size: 1.8rem;
+  font-weight: 700;
+}
+
+.subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.statCard {
+  display: grid;
+  gap: 8px;
+}
+
+.statLabel {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.statValue {
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.searchWrap {
+  min-width: 240px;
+  flex: 1;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 880px;
+}
+
+.table th,
+.table td {
+  padding: 12px 10px;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.muted {
+  color: var(--text-secondary);
+}
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  background: var(--bg-tertiary);
+}
+
+.pillSuccess {
+  color: #0b8f55;
+}
+
+.pillDanger {
+  color: #c0392b;
+}
+
+.keyCell {
+  display: grid;
+  gap: 4px;
+}
+
+.keyName {
+  font-weight: 600;
+}
+
+.keyValue {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.rowActions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.fullWidth {
+  grid-column: 1 / -1;
+}
+
+.textarea {
+  min-height: 96px;
+  resize: vertical;
+}
+
+.checkboxRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+}
+
+.listStack {
+  display: grid;
+  gap: 10px;
+}
+
+.modelList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.modelTag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  background: var(--bg-tertiary);
+  padding: 6px 10px;
+  font-size: 0.85rem;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+.detailColumn {
+  display: grid;
+  gap: 16px;
+}
+
+.description {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+  .formGrid,
+  .detailGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .pageTitle {
+    font-size: 1.5rem;
+  }
+
+  .table {
+    min-width: 720px;
+  }
+}

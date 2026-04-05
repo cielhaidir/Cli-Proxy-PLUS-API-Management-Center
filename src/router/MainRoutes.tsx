@@ -21,6 +21,10 @@ import { ConfigPage } from '@/pages/ConfigPage';
 import { LogsPage } from '@/pages/LogsPage';
 import { SystemPage } from '@/pages/SystemPage';
 import { MonitorPage } from '@/pages/MonitorPage';
+import { ClientApiKeysPage } from '@/pages/ClientApiKeysPage';
+import { ClientApiKeyDetailPage } from '@/pages/ClientApiKeyDetailPage';
+import { ModelPricingPage } from '@/pages/ModelPricingPage';
+import { BillingOverviewPage } from '@/pages/BillingOverviewPage';
 
 const mainRoutes = [
   { path: '/', element: <DashboardPage /> },
@@ -74,6 +78,10 @@ const mainRoutes = [
   { path: '/oauth', element: <OAuthPage /> },
   { path: '/quota', element: <QuotaPage /> },
   { path: '/usage', element: <UsagePage /> },
+  { path: '/client-api-keys', element: <ClientApiKeysPage /> },
+  { path: '/client-api-keys/:key', element: <ClientApiKeyDetailPage /> },
+  { path: '/model-pricing', element: <ModelPricingPage /> },
+  { path: '/billing', element: <BillingOverviewPage /> },
   { path: '/config', element: <ConfigPage /> },
   { path: '/logs', element: <LogsPage /> },
   { path: '/system', element: <SystemPage /> },

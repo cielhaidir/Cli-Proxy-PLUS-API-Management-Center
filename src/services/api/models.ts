@@ -2,10 +2,10 @@
  * 可用模型获取
  */
 
-import axios from 'axios';
 import { normalizeModelList } from '@/utils/models';
 import { normalizeApiBase } from '@/utils/connection';
 import { apiCallApi, getApiCallErrorMessage } from './apiCall';
+import { apiClient } from './client';
 
 const DEFAULT_CLAUDE_BASE_URL = 'https://api.anthropic.com';
 const DEFAULT_GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com';
@@ -81,23 +81,12 @@ const resolveBearerTokenFromAuthorization = (headers: Record<string, string>): s
 
 export const modelsApi = {
   /**
-   * Fetch available models from /v1/models endpoint (for system info page)
+   * Fetch admin-visible model catalog from management endpoint.
    */
-  async fetchModels(baseUrl: string, apiKey?: string, headers: Record<string, string> = {}) {
-    const endpoint = buildV1ModelsEndpoint(baseUrl);
-    if (!endpoint) {
-      throw new Error('Invalid base url');
-    }
-
-    const resolvedHeaders = { ...headers };
-    if (apiKey) {
-      resolvedHeaders.Authorization = `Bearer ${apiKey}`;
-    }
-
-    const response = await axios.get(endpoint, {
-      headers: Object.keys(resolvedHeaders).length ? resolvedHeaders : undefined
-    });
-    const payload = response.data?.data ?? response.data?.models ?? response.data;
+  async fetchModels(baseUrl: string) {
+    void baseUrl;
+    const response = await apiClient.get<Record<string, unknown>>('/models/catalog');
+    const payload = response?.data ?? response?.models ?? response;
     return normalizeModelList(payload, { dedupe: true });
   },
 

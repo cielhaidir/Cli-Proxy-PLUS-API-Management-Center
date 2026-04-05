@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -8,7 +8,7 @@ import {
   IconSatellite
 } from '@/components/ui/icons';
 import { useAuthStore, useConfigStore, useModelsStore } from '@/stores';
-import { apiKeysApi, providersApi, authFilesApi } from '@/services/api';
+import { providersApi, authFilesApi } from '@/services/api';
 import styles from './DashboardPage.module.scss';
 
 interface QuickStat {
@@ -56,80 +56,24 @@ export function DashboardPage() {
 
   const [loading, setLoading] = useState(true);
 
-  const apiKeysCache = useRef<string[]>([]);
-
-  useEffect(() => {
-    apiKeysCache.current = [];
-  }, [apiBase, config?.apiKeys]);
-
-  const normalizeApiKeyList = (input: unknown): string[] => {
-    if (!Array.isArray(input)) return [];
-    const seen = new Set<string>();
-    const keys: string[] = [];
-
-    input.forEach((item) => {
-      const record =
-        item !== null && typeof item === 'object' && !Array.isArray(item)
-          ? (item as Record<string, unknown>)
-          : null;
-      const value =
-        typeof item === 'string'
-          ? item
-          : record
-            ? (record['api-key'] ?? record['apiKey'] ?? record.key ?? record.Key)
-            : '';
-      const trimmed = String(value ?? '').trim();
-      if (!trimmed || seen.has(trimmed)) return;
-      seen.add(trimmed);
-      keys.push(trimmed);
-    });
-
-    return keys;
-  };
-
-  const resolveApiKeysForModels = useCallback(async () => {
-    if (apiKeysCache.current.length) {
-      return apiKeysCache.current;
-    }
-
-    const configKeys = normalizeApiKeyList(config?.apiKeys);
-    if (configKeys.length) {
-      apiKeysCache.current = configKeys;
-      return configKeys;
-    }
-
-    try {
-      const list = await apiKeysApi.list();
-      const normalized = normalizeApiKeyList(list);
-      if (normalized.length) {
-        apiKeysCache.current = normalized;
-      }
-      return normalized;
-    } catch {
-      return [];
-    }
-  }, [config?.apiKeys]);
-
   const fetchModels = useCallback(async () => {
     if (connectionStatus !== 'connected' || !apiBase) {
       return;
     }
 
     try {
-      const apiKeys = await resolveApiKeysForModels();
-      const primaryKey = apiKeys[0];
-      await fetchModelsFromStore(apiBase, primaryKey);
+      await fetchModelsFromStore(apiBase);
     } catch {
       // Ignore model fetch errors on dashboard
     }
-  }, [connectionStatus, apiBase, resolveApiKeysForModels, fetchModelsFromStore]);
+  }, [connectionStatus, apiBase, fetchModelsFromStore]);
 
   useEffect(() => {
     const fetchStats = async () => {
       setLoading(true);
       try {
         const [keysRes, filesRes, geminiRes, codexRes, claudeRes, openaiRes] = await Promise.allSettled([
-          apiKeysApi.list(),
+          Promise.resolve(Array.isArray(config?.apiKeys) ? config.apiKeys : []),
           authFilesApi.list(),
           providersApi.getGeminiKeys(),
           providersApi.getCodexConfigs(),
