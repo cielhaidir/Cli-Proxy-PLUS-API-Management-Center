@@ -12,6 +12,23 @@ import { useAuthStore, useNotificationStore } from '@/stores';
 import type { ClientApiKey, ClientApiKeyPayload } from '@/types';
 import styles from './BillingManagement.module.scss';
 
+const centsToDisplay = (value?: number) => {
+  const amount = Number(value ?? 0) / 100;
+  const [whole, decimal] = amount.toFixed(2).split('.');
+  const withThousands = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${withThousands},${decimal}`;
+};
+
+const parseDisplayToCents = (value: string) => {
+  const normalized = value.replace(/\./g, '').replace(',', '.').trim();
+  if (!normalized) return 0;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error('Format nominal tidak valid');
+  }
+  return Math.round(parsed * 100);
+};
+
 const maskKey = (value: string) => {
   const trimmed = value.trim();
   if (trimmed.length <= 8) return trimmed;
@@ -41,7 +58,7 @@ export function ClientApiKeysPage() {
   const [editing, setEditing] = useState<ClientApiKey | null>(null);
   const [topupTarget, setTopupTarget] = useState<ClientApiKey | null>(null);
   const [form, setForm] = useState<ClientApiKeyPayload>(defaultForm);
-  const [topupAmount, setTopupAmount] = useState('');
+  const [topupAmount, setTopupAmount] = useState('0,00');
   const [topupNote, setTopupNote] = useState('');
 
   const load = useCallback(async () => {
@@ -103,7 +120,7 @@ export function ClientApiKeysPage() {
 
   const openTopup = (item: ClientApiKey) => {
     setTopupTarget(item);
-    setTopupAmount('');
+    setTopupAmount('0,00');
     setTopupNote('');
     setTopupOpen(true);
   };
@@ -141,8 +158,10 @@ export function ClientApiKeysPage() {
 
   const submitTopup = async () => {
     if (!topupTarget) return;
-    const amount = Number(topupAmount);
-    if (!Number.isFinite(amount) || amount <= 0) {
+    let amount = 0;
+    try {
+      amount = parseDisplayToCents(topupAmount);
+    } catch {
       showNotification('Top-up amount must be positive', 'error');
       return;
     }
@@ -193,7 +212,7 @@ export function ClientApiKeysPage() {
       <div className={styles.statsGrid}>
         <Card className={styles.statCard}><div className={styles.statLabel}>Keys</div><div className={styles.statValue}>{items.length}</div></Card>
         <Card className={styles.statCard}><div className={styles.statLabel}>Enabled</div><div className={styles.statValue}>{items.filter((item) => item.enabled !== false).length}</div></Card>
-        <Card className={styles.statCard}><div className={styles.statLabel}>Total Balance</div><div className={styles.statValue}>{items.reduce((sum, item) => sum + (item.creditBalance ?? 0), 0)}</div></Card>
+        <Card className={styles.statCard}><div className={styles.statLabel}>Total Balance</div><div className={styles.statValue}>{centsToDisplay(items.reduce((sum, item) => sum + (item.creditBalance ?? 0), 0))}</div></Card>
         <Card className={styles.statCard}><div className={styles.statLabel}>Priced Models</div><div className={styles.statValue}>{availableModels.length}</div></Card>
       </div>
 
@@ -220,9 +239,9 @@ export function ClientApiKeysPage() {
                     <td><div className={styles.keyCell}><span className={styles.keyName}>{item.name || 'Unnamed key'}</span><span className={styles.muted}>{item.currency || 'USD'}</span></div></td>
                     <td className={styles.keyValue}>{maskKey(item.key)}</td>
                     <td><span className={`${styles.pill} ${item.enabled === false ? styles.pillDanger : styles.pillSuccess}`}>{item.enabled === false ? 'Disabled' : 'Enabled'}</span></td>
-                    <td>{item.creditBalance ?? 0}</td>
-                    <td>{item.totalTopup ?? 0}</td>
-                    <td>{item.totalSpent ?? 0}</td>
+                    <td>{centsToDisplay(item.creditBalance)}</td>
+                    <td>{centsToDisplay(item.totalTopup)}</td>
+                    <td>{centsToDisplay(item.totalSpent)}</td>
                     <td>{item.allowedModels?.length ?? 0}</td>
                     <td>
                       <div className={styles.rowActions}>
@@ -277,7 +296,7 @@ export function ClientApiKeysPage() {
         title={`Top Up ${topupTarget?.name || topupTarget?.key || ''}`}
         footer={<><Button variant="secondary" onClick={() => setTopupOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submitTopup()} loading={saving}>Apply</Button></>}
       >
-        <Input label="Amount" type="number" value={topupAmount} onChange={(event) => setTopupAmount(event.target.value)} />
+        <Input label="Amount ($)" value={topupAmount} onChange={(event) => setTopupAmount(event.target.value)} hint="Contoh: 25,00 untuk top-up $25.00" />
         <Input label="Note" value={topupNote} onChange={(event) => setTopupNote(event.target.value)} />
       </Modal>
     </div>
