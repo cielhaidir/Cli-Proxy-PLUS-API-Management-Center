@@ -55,11 +55,14 @@ export function ClientApiKeysPage() {
   const [query, setQuery] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [topupOpen, setTopupOpen] = useState(false);
+  const [balanceOpen, setBalanceOpen] = useState(false);
   const [editing, setEditing] = useState<ClientApiKey | null>(null);
   const [topupTarget, setTopupTarget] = useState<ClientApiKey | null>(null);
+  const [balanceTarget, setBalanceTarget] = useState<ClientApiKey | null>(null);
   const [form, setForm] = useState<ClientApiKeyPayload>(defaultForm);
   const [topupAmount, setTopupAmount] = useState('0,00');
   const [topupNote, setTopupNote] = useState('');
+  const [balanceAmount, setBalanceAmount] = useState('0,00');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,6 +128,12 @@ export function ClientApiKeysPage() {
     setTopupOpen(true);
   };
 
+  const openBalanceEdit = (item: ClientApiKey) => {
+    setBalanceTarget(item);
+    setBalanceAmount(centsToDisplay(item.creditBalance));
+    setBalanceOpen(true);
+  };
+
   const submitForm = async () => {
     if (!form.key.trim()) {
       showNotification('Client API key is required', 'error');
@@ -176,6 +185,56 @@ export function ClientApiKeysPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const submitBalanceEdit = async () => {
+    if (!balanceTarget) return;
+    let amount = 0;
+    try {
+      amount = parseDisplayToCents(balanceAmount);
+    } catch {
+      showNotification('Balance amount is invalid', 'error');
+      return;
+    }
+    setSaving(true);
+    try {
+      await clientApiKeysApi.update({
+        match: balanceTarget.key,
+        value: {
+          creditBalance: amount,
+        },
+      });
+      showNotification('Balance updated', 'success');
+      setBalanceOpen(false);
+      await load();
+    } catch (err) {
+      showNotification(err instanceof Error ? err.message : 'Balance update failed', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetTotalSpent = (item: ClientApiKey) => {
+    showConfirmation({
+      title: 'Reset total spent',
+      message: `Reset total spent for ${item.name || item.key} to 0?`,
+      variant: 'danger',
+      confirmText: 'Reset',
+      onConfirm: async () => {
+        try {
+          await clientApiKeysApi.update({
+            match: item.key,
+            value: {
+              totalSpent: 0,
+            },
+          });
+          showNotification('Total spent reset', 'success');
+          await load();
+        } catch (err) {
+          showNotification(err instanceof Error ? err.message : 'Reset failed', 'error');
+        }
+      },
+    });
   };
 
   const removeItem = (item: ClientApiKey) => {
@@ -246,7 +305,9 @@ export function ClientApiKeysPage() {
                     <td>
                       <div className={styles.rowActions}>
                         <Button variant="secondary" size="sm" onClick={() => openEdit(item)}>Edit</Button>
+                        <Button variant="secondary" size="sm" onClick={() => openBalanceEdit(item)}>Edit Balance</Button>
                         <Button variant="secondary" size="sm" onClick={() => openTopup(item)}>Top Up</Button>
+                        <Button variant="ghost" size="sm" onClick={() => resetTotalSpent(item)}>Reset Spent</Button>
                         <Link to={`/client-api-keys/${encodeURIComponent(item.key)}`}><Button variant="ghost" size="sm">Detail</Button></Link>
                         <Button variant="danger" size="sm" onClick={() => removeItem(item)}>Delete</Button>
                       </div>
@@ -298,6 +359,15 @@ export function ClientApiKeysPage() {
       >
         <Input label="Amount ($)" value={topupAmount} onChange={(event) => setTopupAmount(event.target.value)} hint="Contoh: 25,00 untuk top-up $25.00" />
         <Input label="Note" value={topupNote} onChange={(event) => setTopupNote(event.target.value)} />
+      </Modal>
+
+      <Modal
+        open={balanceOpen}
+        onClose={() => setBalanceOpen(false)}
+        title={`Edit Balance ${balanceTarget?.name || balanceTarget?.key || ''}`}
+        footer={<><Button variant="secondary" onClick={() => setBalanceOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submitBalanceEdit()} loading={saving}>Save</Button></>}
+      >
+        <Input label="Balance ($)" value={balanceAmount} onChange={(event) => setBalanceAmount(event.target.value)} hint="Contoh: 100,00 untuk balance $100.00" />
       </Modal>
     </div>
   );
