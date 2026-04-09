@@ -126,8 +126,8 @@ export function formatUsdMinorUnits(
   }
 
   const {
-    minimumFractionDigits = 2,
-    maximumFractionDigits = 2,
+    minimumFractionDigits = 0,
+    maximumFractionDigits = 4,
     suffix = true
   } = options;
 
@@ -150,8 +150,8 @@ export function formatUsdAmount(
 
   const absolute = Math.abs(Number(value));
   const {
-    minimumFractionDigits = 2,
-    maximumFractionDigits = absolute > 0 && absolute < 0.1 ? 6 : 2,
+    minimumFractionDigits = 0,
+    maximumFractionDigits = absolute > 0 && absolute < 0.0001 ? 4 : 4,
     suffix = true
   } = options;
 

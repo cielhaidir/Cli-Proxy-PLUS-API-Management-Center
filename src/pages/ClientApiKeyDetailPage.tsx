@@ -133,6 +133,9 @@ export function ClientApiKeyDetailPage() {
               <div className={styles.description}>{clientKey?.notes || 'No notes'}</div>
             </div>
           </Card>
+        </div>
+
+        <div className={styles.detailColumn}>
           <Card title="Allowed Models">
             {clientKey?.allowedModels?.length ? (
               <div className={styles.modelList}>
@@ -143,49 +146,47 @@ export function ClientApiKeyDetailPage() {
             )}
           </Card>
         </div>
-
-        <div className={styles.detailColumn}>
-          <Card title="Activity" subtitle={`${pagination.total} rows`}>
-            {activity.length === 0 ? (
-              <EmptyState title="No activity yet" description="Usage and billing activity will appear here." />
-            ) : (
-              <>
-                <div className={styles.tableWrap}>
-                  <table className={styles.table}>
-                    <thead>
-                      <tr>
-                        <th>Time (GMT+8)</th>
-                        <th>Model</th>
-                         <th>Amount</th>
-                        <th>Input Token</th>
-                        <th>Output Token</th>
-                        <th>Total Token</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activity.map((row) => (
-                        <tr key={row.id}>
-                          <td>{formatTimestampToGMT8(row.time)}</td>
-                          <td>{row.model || '-'}</td>
-                           <td>{row.amount == null ? '-' : formatUsdMinorUnits(row.amount)}</td>
-                          <td>{Number(row.input_tokens ?? 0).toLocaleString('id-ID')}</td>
-                          <td>{Number(row.output_tokens ?? 0).toLocaleString('id-ID')}</td>
-                          <td>{Number(row.total_tokens ?? 0).toLocaleString('id-ID')}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="pagination">
-                  <Button variant="secondary" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Prev</Button>
-                  <span className={styles.muted}>Page {pagination.page} / {pagination.total_pages}</span>
-                  <Button variant="secondary" size="sm" onClick={() => setPage((current) => Math.min(pagination.total_pages, current + 1))} disabled={page >= pagination.total_pages}>Next</Button>
-                </div>
-              </>
-            )}
-          </Card>
-        </div>
       </div>
+
+      <Card title="Activity" subtitle={`${pagination.total} rows`}>
+        {activity.length === 0 ? (
+          <EmptyState title="No activity yet" description="Usage and billing activity will appear here." />
+        ) : (
+          <>
+            <div className={styles.tableWrap}>
+              <table className={`${styles.table} ${styles.activityTable}`}>
+                <thead>
+                  <tr>
+                    <th>Time (GMT+8)</th>
+                    <th>Model</th>
+                    <th>Amount</th>
+                    <th>Input Token</th>
+                    <th>Output Token</th>
+                    <th>Total Token</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activity.map((row) => (
+                    <tr key={row.id}>
+                      <td>{formatTimestampToGMT8(row.time)}</td>
+                      <td>{row.model || '-'}</td>
+                      <td>{row.amount == null ? '-' : formatUsdMinorUnits(row.amount)}</td>
+                      <td>{Number(row.input_tokens ?? 0).toLocaleString('id-ID')}</td>
+                      <td>{Number(row.output_tokens ?? 0).toLocaleString('id-ID')}</td>
+                      <td>{Number(row.total_tokens ?? 0).toLocaleString('id-ID')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="pagination">
+              <Button variant="secondary" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Prev</Button>
+              <span className={styles.muted}>Page {pagination.page} / {pagination.total_pages}</span>
+              <Button variant="secondary" size="sm" onClick={() => setPage((current) => Math.min(pagination.total_pages, current + 1))} disabled={page >= pagination.total_pages}>Next</Button>
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }

@@ -189,6 +189,10 @@
   min-width: 0;
 }
 
+.activityTable {
+  min-width: 1080px;
+}
+
 .description {
   color: var(--text-secondary);
   line-height: 1.5;
@@ -208,5 +212,9 @@
 
   .table {
     min-width: 720px;
+  }
+
+  .activityTable {
+    min-width: 900px;
   }
 }
