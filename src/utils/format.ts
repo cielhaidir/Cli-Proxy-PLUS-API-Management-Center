@@ -11,7 +11,7 @@ const resolveDefaultLocale = (): string | undefined => {
   return fromNavigator || undefined;
 };
 
-const USD_MINOR_UNIT_SCALE = 100;
+const USD_MINOR_UNIT_SCALE = 10000;
 
 interface FormatUsdMinorUnitsOptions {
   minimumFractionDigits?: number;
