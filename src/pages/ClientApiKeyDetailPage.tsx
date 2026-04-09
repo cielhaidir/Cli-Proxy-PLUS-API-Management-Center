@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { clientApiKeysApi } from '@/services/api';
 import type { ClientApiKey } from '@/types';
+import { formatUsdMinorUnits } from '@/utils/format';
 import styles from './BillingManagement.module.scss';
 
 type ActivityRow = {
@@ -25,14 +26,6 @@ type Pagination = {
 };
 
 const PAGE_SIZE = 10;
-
-const centsToDisplay = (value?: number | null) => {
-  if (value == null) return '-';
-  const amount = Number(value ?? 0) / 100;
-  const [whole, decimal] = amount.toFixed(2).split('.');
-  const withThousands = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${withThousands},${decimal}`;
-};
 
 const formatTimestampToGMT8 = (value?: string) => {
   if (!value) return '-';
@@ -91,9 +84,9 @@ export function ClientApiKeyDetailPage() {
   const summary = useMemo(() => {
     if (!clientKey) return [];
     return [
-      { label: 'Current Balance', value: centsToDisplay(clientKey.creditBalance) },
-      { label: 'Total Topup', value: centsToDisplay(clientKey.totalTopup) },
-      { label: 'Total Spent', value: centsToDisplay(clientKey.totalSpent) },
+      { label: 'Current Balance', value: formatUsdMinorUnits(clientKey.creditBalance) },
+      { label: 'Total Topup', value: formatUsdMinorUnits(clientKey.totalTopup) },
+      { label: 'Total Spent', value: formatUsdMinorUnits(clientKey.totalSpent) },
       { label: 'Allowed Models', value: String(clientKey.allowedModels?.length ?? 0) },
     ];
   }, [clientKey]);
@@ -163,7 +156,7 @@ export function ClientApiKeyDetailPage() {
                       <tr>
                         <th>Time (GMT+8)</th>
                         <th>Model</th>
-                        <th>Amount</th>
+                         <th>Amount</th>
                         <th>Input Token</th>
                         <th>Output Token</th>
                         <th>Total Token</th>
@@ -174,7 +167,7 @@ export function ClientApiKeyDetailPage() {
                         <tr key={row.id}>
                           <td>{formatTimestampToGMT8(row.time)}</td>
                           <td>{row.model || '-'}</td>
-                          <td>{row.amount == null ? '-' : centsToDisplay(row.amount)}</td>
+                           <td>{row.amount == null ? '-' : formatUsdMinorUnits(row.amount)}</td>
                           <td>{Number(row.input_tokens ?? 0).toLocaleString('id-ID')}</td>
                           <td>{Number(row.output_tokens ?? 0).toLocaleString('id-ID')}</td>
                           <td>{Number(row.total_tokens ?? 0).toLocaleString('id-ID')}</td>

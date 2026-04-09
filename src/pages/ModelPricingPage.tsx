@@ -9,22 +9,8 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { modelPricingApi, modelsApi } from '@/services/api';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import type { ModelPricingEntry } from '@/types';
+import { formatUsdMinorUnits, parseUsdMinorUnitsInput } from '@/utils/format';
 import styles from './BillingManagement.module.scss';
-
-const centsToDisplay = (value?: number) => {
-  const amount = Number(value ?? 0) / 100;
-  return amount.toFixed(2).replace('.', ',');
-};
-
-const parseDisplayToCents = (value: string) => {
-  const normalized = value.replace(/\./g, '').replace(',', '.').trim();
-  if (!normalized) return 0;
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    throw new Error('Format harga tidak valid');
-  }
-  return Math.round(parsed * 100);
-};
 
 const defaultForm: ModelPricingEntry = {
   model: '',
@@ -91,22 +77,22 @@ export function ModelPricingPage() {
   const openCreate = () => {
     setEditing(null);
     setForm(defaultForm);
-    setInputPriceText(centsToDisplay(defaultForm.inputPrice));
-    setOutputPriceText(centsToDisplay(defaultForm.outputPrice));
-    setReasoningPriceText(centsToDisplay(defaultForm.reasoningPrice));
-    setCachedInputPriceText(centsToDisplay(defaultForm.cachedInputPrice));
-    setRequestPriceText(centsToDisplay(defaultForm.requestPrice));
+    setInputPriceText(formatUsdMinorUnits(defaultForm.inputPrice, { suffix: false, maximumFractionDigits: 4 }));
+    setOutputPriceText(formatUsdMinorUnits(defaultForm.outputPrice, { suffix: false, maximumFractionDigits: 4 }));
+    setReasoningPriceText(formatUsdMinorUnits(defaultForm.reasoningPrice, { suffix: false, maximumFractionDigits: 4 }));
+    setCachedInputPriceText(formatUsdMinorUnits(defaultForm.cachedInputPrice, { suffix: false, maximumFractionDigits: 4 }));
+    setRequestPriceText(formatUsdMinorUnits(defaultForm.requestPrice, { suffix: false, maximumFractionDigits: 4 }));
     setModalOpen(true);
   };
 
   const openEdit = (item: ModelPricingEntry) => {
     setEditing(item);
     setForm({ ...defaultForm, ...item });
-    setInputPriceText(centsToDisplay(item.inputPrice));
-    setOutputPriceText(centsToDisplay(item.outputPrice));
-    setReasoningPriceText(centsToDisplay(item.reasoningPrice));
-    setCachedInputPriceText(centsToDisplay(item.cachedInputPrice));
-    setRequestPriceText(centsToDisplay(item.requestPrice));
+    setInputPriceText(formatUsdMinorUnits(item.inputPrice, { suffix: false, maximumFractionDigits: 4 }));
+    setOutputPriceText(formatUsdMinorUnits(item.outputPrice, { suffix: false, maximumFractionDigits: 4 }));
+    setReasoningPriceText(formatUsdMinorUnits(item.reasoningPrice, { suffix: false, maximumFractionDigits: 4 }));
+    setCachedInputPriceText(formatUsdMinorUnits(item.cachedInputPrice, { suffix: false, maximumFractionDigits: 4 }));
+    setRequestPriceText(formatUsdMinorUnits(item.requestPrice, { suffix: false, maximumFractionDigits: 4 }));
     setModalOpen(true);
   };
 
@@ -122,11 +108,11 @@ export function ModelPricingPage() {
         model: form.model.trim(),
         currency: 'USD',
         pricingType: form.pricingType?.trim() || 'per_1m_tokens',
-        inputPrice: parseDisplayToCents(inputPriceText),
-        outputPrice: parseDisplayToCents(outputPriceText),
-        reasoningPrice: parseDisplayToCents(reasoningPriceText),
-        cachedInputPrice: parseDisplayToCents(cachedInputPriceText),
-        requestPrice: parseDisplayToCents(requestPriceText),
+        inputPrice: parseUsdMinorUnitsInput(inputPriceText),
+        outputPrice: parseUsdMinorUnitsInput(outputPriceText),
+        reasoningPrice: parseUsdMinorUnitsInput(reasoningPriceText),
+        cachedInputPrice: parseUsdMinorUnitsInput(cachedInputPriceText),
+        requestPrice: parseUsdMinorUnitsInput(requestPriceText),
       };
       if (editing) {
         await modelPricingApi.update({ match: editing.model, value: payload });
@@ -196,11 +182,11 @@ export function ModelPricingPage() {
                 {filteredItems.map((item) => (
                   <tr key={item.model}>
                     <td><div className={styles.keyCell}><span className={styles.keyName}>{item.model}</span><span className={styles.muted}>{item.pricingType || 'per_1m_tokens'} · {item.currency || 'USD'}</span></div></td>
-                    <td>{centsToDisplay(item.inputPrice)}</td>
-                    <td>{centsToDisplay(item.outputPrice)}</td>
-                    <td>{centsToDisplay(item.reasoningPrice)}</td>
-                    <td>{centsToDisplay(item.cachedInputPrice)}</td>
-                    <td>{centsToDisplay(item.requestPrice)}</td>
+                    <td>{formatUsdMinorUnits(item.inputPrice, { maximumFractionDigits: 4 })}</td>
+                    <td>{formatUsdMinorUnits(item.outputPrice, { maximumFractionDigits: 4 })}</td>
+                    <td>{formatUsdMinorUnits(item.reasoningPrice, { maximumFractionDigits: 4 })}</td>
+                    <td>{formatUsdMinorUnits(item.cachedInputPrice, { maximumFractionDigits: 4 })}</td>
+                    <td>{formatUsdMinorUnits(item.requestPrice, { maximumFractionDigits: 4 })}</td>
                     <td><span className={`${styles.pill} ${item.enabled === false ? styles.pillDanger : styles.pillSuccess}`}>{item.enabled === false ? 'Disabled' : 'Enabled'}</span></td>
                     <td><div className={styles.rowActions}><Button variant="secondary" size="sm" onClick={() => openEdit(item)}>Edit</Button><Button variant="danger" size="sm" onClick={() => removeItem(item)}>Delete</Button></div></td>
                   </tr>
@@ -230,8 +216,8 @@ export function ModelPricingPage() {
           <Input label="Currency" value="USD" disabled />
           <Input label="Pricing Type" value={form.pricingType ?? 'per_1m_tokens'} onChange={(event) => setForm((current) => ({ ...current, pricingType: event.target.value }))} />
           <div className={styles.checkboxRow}><ToggleSwitch checked={form.enabled !== false} onChange={(checked) => setForm((current) => ({ ...current, enabled: checked }))} /><span>Enabled</span></div>
-          <Input label="Input Price ($/1M)" value={inputPriceText} onChange={(event) => setInputPriceText(event.target.value)} hint="Contoh: 2,50 untuk $2.50 per 1M token" />
-          <Input label="Output Price ($/1M)" value={outputPriceText} onChange={(event) => setOutputPriceText(event.target.value)} hint="Contoh: 15,00 untuk $15.00 per 1M token" />
+          <Input label="Input Price ($/1M)" value={inputPriceText} onChange={(event) => setInputPriceText(event.target.value)} hint="Contoh: 1,00 untuk $1.00 atau 0,75 untuk $0.75 per 1M token" />
+          <Input label="Output Price ($/1M)" value={outputPriceText} onChange={(event) => setOutputPriceText(event.target.value)} hint="Contoh: 7,50 untuk $7.50 per 1M token" />
           <Input label="Reasoning Price ($/1M)" value={reasoningPriceText} onChange={(event) => setReasoningPriceText(event.target.value)} />
           <Input label="Cached Input Price ($/1M)" value={cachedInputPriceText} onChange={(event) => setCachedInputPriceText(event.target.value)} />
           <Input label="Request Price ($)" value={requestPriceText} onChange={(event) => setRequestPriceText(event.target.value)} />

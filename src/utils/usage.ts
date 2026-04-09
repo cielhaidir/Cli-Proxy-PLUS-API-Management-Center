@@ -433,10 +433,11 @@ export function formatUsd(value: number): string {
   if (!Number.isFinite(num)) {
     return '$0.00';
   }
-  const fixed = num.toFixed(2);
-  const parts = Number(fixed).toLocaleString(undefined, {
+  const absolute = Math.abs(num);
+  const maximumFractionDigits = absolute > 0 && absolute < 0.1 ? 6 : 2;
+  const parts = num.toLocaleString(undefined, {
     minimumFractionDigits: 2,
-    maximumFractionDigits: 2
+    maximumFractionDigits
   });
   return `$${parts}`;
 }

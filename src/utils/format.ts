@@ -11,6 +11,14 @@ const resolveDefaultLocale = (): string | undefined => {
   return fromNavigator || undefined;
 };
 
+const USD_MINOR_UNIT_SCALE = 100;
+
+interface FormatUsdMinorUnitsOptions {
+  minimumFractionDigits?: number;
+  maximumFractionDigits?: number;
+  suffix?: boolean;
+}
+
 /**
  * 隐藏 API Key 中间部分，仅保留前后两位
  */
@@ -101,6 +109,49 @@ export function formatUnixTimestamp(value: unknown, locale?: string): string {
 export function formatNumber(num: number, locale?: string): string {
   const resolvedLocale = locale?.trim() || resolveDefaultLocale();
   return num.toLocaleString(resolvedLocale);
+}
+
+export function formatUsdMinorUnits(
+  value?: number | null,
+  options: FormatUsdMinorUnitsOptions = {}
+): string {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return '-';
+  }
+
+  const {
+    minimumFractionDigits = 2,
+    maximumFractionDigits = 2,
+    suffix = true
+  } = options;
+
+  const amount = Number(value) / USD_MINOR_UNIT_SCALE;
+  const formatted = amount.toLocaleString('id-ID', {
+    minimumFractionDigits,
+    maximumFractionDigits
+  });
+
+  return suffix ? `${formatted} USD` : formatted;
+}
+
+export function parseUsdMinorUnitsInput(value: string): number {
+  const normalized = value
+    .replace(/\s*USD\s*$/i, '')
+    .replace(/\s/g, '')
+    .replace(/\./g, '')
+    .replace(',', '.')
+    .trim();
+
+  if (!normalized) {
+    return 0;
+  }
+
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) {
+    throw new Error('Format nominal tidak valid');
+  }
+
+  return Math.round(parsed * USD_MINOR_UNIT_SCALE);
 }
 
 /**

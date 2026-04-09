@@ -10,24 +10,8 @@ import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { clientApiKeysApi, modelsApi } from '@/services/api';
 import { useAuthStore, useNotificationStore } from '@/stores';
 import type { ClientApiKey, ClientApiKeyPayload } from '@/types';
+import { formatUsdMinorUnits, parseUsdMinorUnitsInput } from '@/utils/format';
 import styles from './BillingManagement.module.scss';
-
-const centsToDisplay = (value?: number) => {
-  const amount = Number(value ?? 0) / 100;
-  const [whole, decimal] = amount.toFixed(2).split('.');
-  const withThousands = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-  return `${withThousands},${decimal}`;
-};
-
-const parseDisplayToCents = (value: string) => {
-  const normalized = value.replace(/\./g, '').replace(',', '.').trim();
-  if (!normalized) return 0;
-  const parsed = Number(normalized);
-  if (!Number.isFinite(parsed) || parsed <= 0) {
-    throw new Error('Format nominal tidak valid');
-  }
-  return Math.round(parsed * 100);
-};
 
 const maskKey = (value: string) => {
   const trimmed = value.trim();
@@ -130,7 +114,7 @@ export function ClientApiKeysPage() {
 
   const openBalanceEdit = (item: ClientApiKey) => {
     setBalanceTarget(item);
-    setBalanceAmount(centsToDisplay(item.creditBalance));
+    setBalanceAmount(formatUsdMinorUnits(item.creditBalance, { suffix: false }));
     setBalanceOpen(true);
   };
 
@@ -169,7 +153,10 @@ export function ClientApiKeysPage() {
     if (!topupTarget) return;
     let amount = 0;
     try {
-      amount = parseDisplayToCents(topupAmount);
+      amount = parseUsdMinorUnitsInput(topupAmount);
+      if (amount <= 0) {
+        throw new Error('Format nominal tidak valid');
+      }
     } catch {
       showNotification('Top-up amount must be positive', 'error');
       return;
@@ -191,7 +178,10 @@ export function ClientApiKeysPage() {
     if (!balanceTarget) return;
     let amount = 0;
     try {
-      amount = parseDisplayToCents(balanceAmount);
+      amount = parseUsdMinorUnitsInput(balanceAmount);
+      if (amount <= 0) {
+        throw new Error('Format nominal tidak valid');
+      }
     } catch {
       showNotification('Balance amount is invalid', 'error');
       return;
@@ -271,7 +261,7 @@ export function ClientApiKeysPage() {
       <div className={styles.statsGrid}>
         <Card className={styles.statCard}><div className={styles.statLabel}>Keys</div><div className={styles.statValue}>{items.length}</div></Card>
         <Card className={styles.statCard}><div className={styles.statLabel}>Enabled</div><div className={styles.statValue}>{items.filter((item) => item.enabled !== false).length}</div></Card>
-        <Card className={styles.statCard}><div className={styles.statLabel}>Total Balance</div><div className={styles.statValue}>{centsToDisplay(items.reduce((sum, item) => sum + (item.creditBalance ?? 0), 0))}</div></Card>
+        <Card className={styles.statCard}><div className={styles.statLabel}>Total Balance</div><div className={styles.statValue}>{formatUsdMinorUnits(items.reduce((sum, item) => sum + (item.creditBalance ?? 0), 0))}</div></Card>
         <Card className={styles.statCard}><div className={styles.statLabel}>Priced Models</div><div className={styles.statValue}>{availableModels.length}</div></Card>
       </div>
 
@@ -298,9 +288,9 @@ export function ClientApiKeysPage() {
                     <td><div className={styles.keyCell}><span className={styles.keyName}>{item.name || 'Unnamed key'}</span><span className={styles.muted}>{item.currency || 'USD'}</span></div></td>
                     <td className={styles.keyValue}>{maskKey(item.key)}</td>
                     <td><span className={`${styles.pill} ${item.enabled === false ? styles.pillDanger : styles.pillSuccess}`}>{item.enabled === false ? 'Disabled' : 'Enabled'}</span></td>
-                    <td>{centsToDisplay(item.creditBalance)}</td>
-                    <td>{centsToDisplay(item.totalTopup)}</td>
-                    <td>{centsToDisplay(item.totalSpent)}</td>
+                    <td>{formatUsdMinorUnits(item.creditBalance)}</td>
+                    <td>{formatUsdMinorUnits(item.totalTopup)}</td>
+                    <td>{formatUsdMinorUnits(item.totalSpent)}</td>
                     <td>{item.allowedModels?.length ?? 0}</td>
                     <td>
                       <div className={styles.rowActions}>
