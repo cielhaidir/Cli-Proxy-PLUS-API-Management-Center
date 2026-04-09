@@ -106,6 +106,13 @@ export const clientApiKeysApi = {
     return Array.isArray(items) ? items.map(normalizeLedgerEntry) : [];
   },
 
+  getActivity(apiKey: string, page = 1, pageSize = 20) {
+    return apiClient.get<{
+      items?: Array<Record<string, unknown>>;
+      pagination?: Record<string, unknown>;
+    }>(`/client-api-keys/${encodeURIComponent(apiKey)}/activity?page=${page}&page_size=${pageSize}`);
+  },
+
   getUsage(apiKey: string) {
     return apiClient.get<Record<string, unknown>>(`/client-api-keys/${encodeURIComponent(apiKey)}/usage`);
   },

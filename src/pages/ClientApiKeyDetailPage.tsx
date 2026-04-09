@@ -4,48 +4,99 @@ import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { clientApiKeysApi } from '@/services/api';
-import type { ClientApiKey, LedgerEntry } from '@/types';
+import type { ClientApiKey } from '@/types';
 import styles from './BillingManagement.module.scss';
+
+type ActivityRow = {
+  id: string;
+  kind: string;
+  time?: string;
+  model?: string;
+  amount?: number | null;
+  input_tokens?: number;
+  output_tokens?: number;
+  total_tokens?: number;
+  source?: string;
+};
+
+type Pagination = {
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
+};
+
+const PAGE_SIZE = 10;
+
+const centsToDisplay = (value?: number | null) => {
+  if (value == null) return '-';
+  const amount = Number(value ?? 0) / 100;
+  const [whole, decimal] = amount.toFixed(2).split('.');
+  const withThousands = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${withThousands},${decimal}`;
+};
+
+const formatTimestampToGMT8 = (value?: string) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).format(date);
+};
 
 export function ClientApiKeyDetailPage() {
   const { key = '' } = useParams();
   const decodedKey = decodeURIComponent(key);
   const [clientKey, setClientKey] = useState<ClientApiKey | null>(null);
-  const [ledger, setLedger] = useState<LedgerEntry[]>([]);
-  const [usage, setUsage] = useState<Record<string, unknown> | null>(null);
+  const [activity, setActivity] = useState<ActivityRow[]>([]);
+  const [pagination, setPagination] = useState<Pagination>({ page: 1, page_size: PAGE_SIZE, total: 0, total_pages: 1 });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (nextPage = page) => {
     setLoading(true);
     setError('');
     try {
-      const [keys, ledgerData, usageData] = await Promise.all([
+      const [keys, activityData] = await Promise.all([
         clientApiKeysApi.list(),
-        clientApiKeysApi.getLedger(decodedKey),
-        clientApiKeysApi.getUsage(decodedKey),
+        clientApiKeysApi.getActivity(decodedKey, nextPage, PAGE_SIZE),
       ]);
       setClientKey(keys.find((item) => item.key === decodedKey) ?? null);
-      setLedger(ledgerData);
-      setUsage((usageData.usage as Record<string, unknown> | null) ?? null);
+      setActivity(Array.isArray(activityData.items) ? (activityData.items as ActivityRow[]) : []);
+      setPagination({
+        page: Number(activityData.pagination?.page ?? nextPage),
+        page_size: Number(activityData.pagination?.page_size ?? PAGE_SIZE),
+        total: Number(activityData.pagination?.total ?? 0),
+        total_pages: Number(activityData.pagination?.total_pages ?? 1),
+      });
+      setPage(Number(activityData.pagination?.page ?? nextPage));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load client API key detail');
     } finally {
       setLoading(false);
     }
-  }, [decodedKey]);
+  }, [decodedKey, page]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    void load(page);
+  }, [load, page]);
 
   const summary = useMemo(() => {
     if (!clientKey) return [];
     return [
-      { label: 'Current Balance', value: clientKey.creditBalance ?? 0 },
-      { label: 'Total Topup', value: clientKey.totalTopup ?? 0 },
-      { label: 'Total Spent', value: clientKey.totalSpent ?? 0 },
-      { label: 'Allowed Models', value: clientKey.allowedModels?.length ?? 0 },
+      { label: 'Current Balance', value: centsToDisplay(clientKey.creditBalance) },
+      { label: 'Total Topup', value: centsToDisplay(clientKey.totalTopup) },
+      { label: 'Total Spent', value: centsToDisplay(clientKey.totalSpent) },
+      { label: 'Allowed Models', value: String(clientKey.allowedModels?.length ?? 0) },
     ];
   }, [clientKey]);
 
@@ -66,7 +117,7 @@ export function ClientApiKeyDetailPage() {
         </div>
         <div className={styles.actions}>
           <Link to="/client-api-keys"><Button variant="secondary">Back</Button></Link>
-          <Button variant="secondary" onClick={() => void load()} disabled={loading}>Refresh</Button>
+          <Button variant="secondary" onClick={() => void load(page)} disabled={loading}>Refresh</Button>
         </div>
       </div>
 
@@ -87,7 +138,7 @@ export function ClientApiKeyDetailPage() {
             <div className={styles.listStack}>
               <div className={styles.description}>Enabled: {clientKey?.enabled === false ? 'No' : 'Yes'}</div>
               <div className={styles.description}>Currency: {clientKey?.currency || 'USD'}</div>
-              <div className={styles.description}>Updated: {clientKey?.updatedAt || 'N/A'}</div>
+              <div className={styles.description}>Updated: {clientKey?.updatedAt ? formatTimestampToGMT8(clientKey.updatedAt) : 'N/A'}</div>
               <div className={styles.description}>{clientKey?.notes || 'No notes'}</div>
             </div>
           </Card>
@@ -100,37 +151,48 @@ export function ClientApiKeyDetailPage() {
               <div className={styles.description}>No explicit model restrictions configured.</div>
             )}
           </Card>
-          <Card title="Usage Snapshot">
-            {usage ? <pre className={styles.description}>{JSON.stringify(usage, null, 2)}</pre> : <div className={styles.description}>No usage snapshot available.</div>}
-          </Card>
         </div>
 
         <div className={styles.detailColumn}>
-          <Card title="Ledger" subtitle={`${ledger.length} entries`}>
-            {ledger.length === 0 ? (
-              <EmptyState title="No ledger entries" description="Top-ups, adjustments, and debits will appear here." />
+          <Card title="Activity" subtitle={`${pagination.total} rows`}>
+            {activity.length === 0 ? (
+              <EmptyState title="No activity yet" description="Usage and billing activity will appear here." />
             ) : (
-              <div className={styles.tableWrap}>
-                <table className={styles.table}>
-                  <thead>
-                    <tr>
-                      <th>Time</th><th>Type</th><th>Amount</th><th>Model</th><th>Request ID</th><th>Description</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ledger.map((entry) => (
-                      <tr key={entry.id}>
-                        <td>{entry.createdAt || '-'}</td>
-                        <td>{entry.type}</td>
-                        <td>{entry.amount}</td>
-                        <td>{entry.model || '-'}</td>
-                        <td className={styles.keyValue}>{entry.requestId || '-'}</td>
-                        <td>{entry.description || '-'}</td>
+              <>
+                <div className={styles.tableWrap}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        <th>Time (GMT+8)</th>
+                        <th>Model</th>
+                        <th>Amount</th>
+                        <th>Input Token</th>
+                        <th>Output Token</th>
+                        <th>Total Token</th>
+                        <th>Source</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {activity.map((row) => (
+                        <tr key={row.id}>
+                          <td>{formatTimestampToGMT8(row.time)}</td>
+                          <td>{row.model || '-'}</td>
+                          <td>{row.amount == null ? '-' : centsToDisplay(row.amount)}</td>
+                          <td>{Number(row.input_tokens ?? 0).toLocaleString('id-ID')}</td>
+                          <td>{Number(row.output_tokens ?? 0).toLocaleString('id-ID')}</td>
+                          <td>{Number(row.total_tokens ?? 0).toLocaleString('id-ID')}</td>
+                          <td>{row.source || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="pagination">
+                  <Button variant="secondary" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Prev</Button>
+                  <span className={styles.muted}>Page {pagination.page} / {pagination.total_pages}</span>
+                  <Button variant="secondary" size="sm" onClick={() => setPage((current) => Math.min(pagination.total_pages, current + 1))} disabled={page >= pagination.total_pages}>Next</Button>
+                </div>
+              </>
             )}
           </Card>
         </div>

@@ -68,6 +68,7 @@
 
 .tableWrap {
   overflow-x: auto;
+  width: 100%;
 }
 
 .table {
@@ -177,13 +178,15 @@
 
 .detailGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
+  align-items: start;
 }
 
 .detailColumn {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .description {

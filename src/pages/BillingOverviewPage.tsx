@@ -7,6 +7,14 @@ import { billingApi } from '@/services/api';
 import type { BillingOverview } from '@/types';
 import styles from './BillingManagement.module.scss';
 
+const centsToDisplay = (value?: number | null) => {
+  if (value == null) return '-';
+  const amount = Number(value ?? 0) / 100;
+  const [whole, decimal] = amount.toFixed(2).split('.');
+  const withThousands = whole.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${withThousands},${decimal}`;
+};
+
 export function BillingOverviewPage() {
   const [overview, setOverview] = useState<BillingOverview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -56,9 +64,9 @@ export function BillingOverviewPage() {
       {error && <div className="error-box">{error}</div>}
 
       <div className={styles.statsGrid}>
-        <Card className={styles.statCard}><div className={styles.statLabel}>Total Balance</div><div className={styles.statValue}>{overview?.totalBalance ?? 0}</div></Card>
-        <Card className={styles.statCard}><div className={styles.statLabel}>Total Topup</div><div className={styles.statValue}>{overview?.totalTopup ?? 0}</div></Card>
-        <Card className={styles.statCard}><div className={styles.statLabel}>Total Spent</div><div className={styles.statValue}>{overview?.totalSpent ?? 0}</div></Card>
+        <Card className={styles.statCard}><div className={styles.statLabel}>Total Balance (USD)</div><div className={styles.statValue}>{centsToDisplay(overview?.totalBalance)}</div></Card>
+        <Card className={styles.statCard}><div className={styles.statLabel}>Total Topup (USD)</div><div className={styles.statValue}>{centsToDisplay(overview?.totalTopup)}</div></Card>
+        <Card className={styles.statCard}><div className={styles.statLabel}>Total Spent (USD)</div><div className={styles.statValue}>{centsToDisplay(overview?.totalSpent)}</div></Card>
         <Card className={styles.statCard}><div className={styles.statLabel}>Ledger Entries</div><div className={styles.statValue}>{overview?.ledgerEntries ?? 0}</div></Card>
       </div>
 
@@ -72,7 +80,7 @@ export function BillingOverviewPage() {
                 {lowBalanceKeys.map((item) => (
                   <div key={item.key} className={styles.keyCell}>
                     <Link to={`/client-api-keys/${encodeURIComponent(item.key)}`} className={styles.keyName}>{item.name || item.key}</Link>
-                    <span className={styles.muted}>Balance: {item.creditBalance ?? 0}</span>
+                    <span className={styles.muted}>Balance: {centsToDisplay(item.creditBalance)} USD</span>
                   </div>
                 ))}
               </div>
@@ -87,7 +95,7 @@ export function BillingOverviewPage() {
                 {negativeBalanceKeys.map((item) => (
                   <div key={item.key} className={styles.keyCell}>
                     <Link to={`/client-api-keys/${encodeURIComponent(item.key)}`} className={styles.keyName}>{item.name || item.key}</Link>
-                    <span className={styles.muted}>Balance: {item.creditBalance ?? 0}</span>
+                    <span className={styles.muted}>Balance: {centsToDisplay(item.creditBalance)} USD</span>
                   </div>
                 ))}
               </div>
@@ -103,14 +111,14 @@ export function BillingOverviewPage() {
               <div className={styles.tableWrap}>
                 <table className={styles.table}>
                   <thead>
-                    <tr><th>Key</th><th>Spent</th><th>Balance</th><th>Models</th></tr>
+                    <tr><th>Key</th><th>Spent (USD)</th><th>Balance (USD)</th><th>Models</th></tr>
                   </thead>
                   <tbody>
                     {topSpendKeys.map((item) => (
                       <tr key={item.key}>
                         <td><Link to={`/client-api-keys/${encodeURIComponent(item.key)}`}>{item.name || item.key}</Link></td>
-                        <td>{item.totalSpent ?? 0}</td>
-                        <td>{item.creditBalance ?? 0}</td>
+                        <td>{centsToDisplay(item.totalSpent)}</td>
+                        <td>{centsToDisplay(item.creditBalance)}</td>
                         <td>{item.allowedModels?.length ?? 0}</td>
                       </tr>
                     ))}
