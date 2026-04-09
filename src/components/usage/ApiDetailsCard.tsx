@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
-import { formatCompactNumber, formatUsd, type ApiStats } from '@/utils/usage';
+import { formatCompactNumber, type ApiStats } from '@/utils/usage';
+import { formatUsdAmount } from '@/utils/format';
 import styles from '@/pages/UsagePage.module.scss';
 
 export interface ApiDetailsCardProps {
@@ -116,7 +117,7 @@ export function ApiDetailsCard({ apiStats, loading, hasPrices }: ApiDetailsCardP
                           </span>
                           {hasPrices && api.totalCost > 0 && (
                             <span className={styles.apiBadge}>
-                              {t('usage_stats.total_cost')}: {formatUsd(api.totalCost)}
+                              {t('usage_stats.total_cost')}: {formatUsdAmount(api.totalCost)}
                             </span>
                           )}
                         </div>

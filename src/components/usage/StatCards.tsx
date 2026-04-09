@@ -5,12 +5,12 @@ import { IconDiamond, IconDollarSign, IconSatellite, IconTimer, IconTrendingUp }
 import {
   formatCompactNumber,
   formatPerMinuteValue,
-  formatUsd,
   calculateCost,
   collectUsageDetails,
   extractTotalTokens,
   type ModelPrice
 } from '@/utils/usage';
+import { formatUsdAmount } from '@/utils/format';
 import { sparklineOptions } from '@/utils/usage/chartConfig';
 import type { UsagePayload } from './hooks/useUsageData';
 import type { SparklineBundle } from './hooks/useSparklines';
@@ -184,7 +184,7 @@ export function StatCards({ usage, loading, modelPrices, nowMs, sparklines }: St
       accent: '#f59e0b',
       accentSoft: 'rgba(245, 158, 11, 0.18)',
       accentBorder: 'rgba(245, 158, 11, 0.32)',
-      value: loading ? '-' : hasPrices ? formatUsd(totalCost) : '--',
+      value: loading ? '-' : hasPrices ? formatUsdAmount(totalCost) : '--',
       meta: (
         <>
           <span className={styles.statMetaItem}>

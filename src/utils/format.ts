@@ -19,6 +19,12 @@ interface FormatUsdMinorUnitsOptions {
   suffix?: boolean;
 }
 
+interface FormatUsdAmountOptions {
+  minimumFractionDigits?: number;
+  maximumFractionDigits?: number;
+  suffix?: boolean;
+}
+
 /**
  * 隐藏 API Key 中间部分，仅保留前后两位
  */
@@ -127,6 +133,29 @@ export function formatUsdMinorUnits(
 
   const amount = Number(value) / USD_MINOR_UNIT_SCALE;
   const formatted = amount.toLocaleString('id-ID', {
+    minimumFractionDigits,
+    maximumFractionDigits
+  });
+
+  return suffix ? `${formatted} USD` : formatted;
+}
+
+export function formatUsdAmount(
+  value?: number | null,
+  options: FormatUsdAmountOptions = {}
+): string {
+  if (value == null || !Number.isFinite(Number(value))) {
+    return '-';
+  }
+
+  const absolute = Math.abs(Number(value));
+  const {
+    minimumFractionDigits = 2,
+    maximumFractionDigits = absolute > 0 && absolute < 0.1 ? 6 : 2,
+    suffix = true
+  } = options;
+
+  const formatted = Number(value).toLocaleString('id-ID', {
     minimumFractionDigits,
     maximumFractionDigits
   });

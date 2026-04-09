@@ -7,9 +7,9 @@ import { Button } from '@/components/ui/Button';
 import {
   buildHourlyCostSeries,
   buildDailyCostSeries,
-  formatUsd,
   type ModelPrice
 } from '@/utils/usage';
+import { formatUsdAmount } from '@/utils/format';
 import { buildChartOptions, getHourChartMinWidth } from '@/utils/usage/chartConfig';
 import type { UsagePayload } from './hooks/useUsageData';
 import styles from '@/pages/UsagePage.module.scss';
@@ -84,7 +84,7 @@ export function CostTrendChart({
           ...baseOptions.scales?.y,
           ticks: {
             ...(baseOptions.scales?.y && 'ticks' in baseOptions.scales.y ? baseOptions.scales.y.ticks : {}),
-            callback: (value: string | number) => formatUsd(Number(value))
+            callback: (value: string | number) => formatUsdAmount(Number(value))
           }
         }
       }

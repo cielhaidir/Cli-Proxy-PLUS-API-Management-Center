@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { Select } from '@/components/ui/Select';
 import type { ModelPrice } from '@/utils/usage';
+import { formatUsdAmount } from '@/utils/format';
 import styles from '@/pages/UsagePage.module.scss';
 
 export interface PriceSettingsCardProps {
@@ -154,13 +155,13 @@ export function PriceSettingsCard({
                     <span className={styles.priceModel}>{model}</span>
                     <div className={styles.priceMeta}>
                       <span>
-                        {t('usage_stats.model_price_prompt')}: ${price.prompt.toFixed(4)}/1M
+                        {t('usage_stats.model_price_prompt')}: {formatUsdAmount(price.prompt, { maximumFractionDigits: 4 })}/1M
                       </span>
                       <span>
-                        {t('usage_stats.model_price_completion')}: ${price.completion.toFixed(4)}/1M
+                        {t('usage_stats.model_price_completion')}: {formatUsdAmount(price.completion, { maximumFractionDigits: 4 })}/1M
                       </span>
                       <span>
-                        {t('usage_stats.model_price_cache')}: ${price.cache.toFixed(4)}/1M
+                        {t('usage_stats.model_price_cache')}: {formatUsdAmount(price.cache, { maximumFractionDigits: 4 })}/1M
                       </span>
                     </div>
                   </div>

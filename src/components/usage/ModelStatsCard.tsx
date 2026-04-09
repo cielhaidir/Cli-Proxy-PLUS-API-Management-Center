@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Card } from '@/components/ui/Card';
-import { formatCompactNumber, formatUsd } from '@/utils/usage';
+import { formatCompactNumber } from '@/utils/usage';
+import { formatUsdAmount } from '@/utils/format';
 import styles from '@/pages/UsagePage.module.scss';
 
 export interface ModelStat {
@@ -144,7 +145,7 @@ export function ModelStatsCard({ modelStats, loading, hasPrices }: ModelStatsCar
                         {stat.successRate.toFixed(1)}%
                       </span>
                     </td>
-                    {hasPrices && <td>{stat.cost > 0 ? formatUsd(stat.cost) : '--'}</td>}
+                    {hasPrices && <td>{stat.cost > 0 ? formatUsdAmount(stat.cost) : '--'}</td>}
                   </tr>
                 ))}
               </tbody>
