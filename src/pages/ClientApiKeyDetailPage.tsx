@@ -9,14 +9,12 @@ import styles from './BillingManagement.module.scss';
 
 type ActivityRow = {
   id: string;
-  kind: string;
   time?: string;
   model?: string;
   amount?: number | null;
   input_tokens?: number;
   output_tokens?: number;
   total_tokens?: number;
-  source?: string;
 };
 
 type Pagination = {
@@ -169,7 +167,6 @@ export function ClientApiKeyDetailPage() {
                         <th>Input Token</th>
                         <th>Output Token</th>
                         <th>Total Token</th>
-                        <th>Source</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -181,7 +178,6 @@ export function ClientApiKeyDetailPage() {
                           <td>{Number(row.input_tokens ?? 0).toLocaleString('id-ID')}</td>
                           <td>{Number(row.output_tokens ?? 0).toLocaleString('id-ID')}</td>
                           <td>{Number(row.total_tokens ?? 0).toLocaleString('id-ID')}</td>
-                          <td>{row.source || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
