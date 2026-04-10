@@ -15,6 +15,8 @@ type ActivityRow = {
   amount?: number | null;
   input_tokens?: number;
   output_tokens?: number;
+  reasoning_tokens?: number;
+  cached_tokens?: number;
   total_tokens?: number;
 };
 
@@ -162,6 +164,8 @@ export function ClientApiKeyDetailPage() {
                     <th>Amount</th>
                     <th>Input Token</th>
                     <th>Output Token</th>
+                    <th>Reasoning Token</th>
+                    <th>Cached Token</th>
                     <th>Total Token</th>
                   </tr>
                 </thead>
@@ -173,6 +177,8 @@ export function ClientApiKeyDetailPage() {
                       <td>{row.amount == null ? '-' : formatUsdMinorUnits(row.amount)}</td>
                       <td>{Number(row.input_tokens ?? 0).toLocaleString('id-ID')}</td>
                       <td>{Number(row.output_tokens ?? 0).toLocaleString('id-ID')}</td>
+                      <td>{Number(row.reasoning_tokens ?? 0).toLocaleString('id-ID')}</td>
+                      <td>{Number(row.cached_tokens ?? 0).toLocaleString('id-ID')}</td>
                       <td>{Number(row.total_tokens ?? 0).toLocaleString('id-ID')}</td>
                     </tr>
                   ))}
