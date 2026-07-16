@@ -1,4 +1,5 @@
 export interface ClientApiKey {
+  id?: string;
   key: string;
   name?: string;
   enabled?: boolean;
@@ -10,6 +11,7 @@ export interface ClientApiKey {
   notes?: string;
   createdAt?: string;
   updatedAt?: string;
+  filterableName?: boolean;
 }
 
 export interface ClientApiKeyPayload {

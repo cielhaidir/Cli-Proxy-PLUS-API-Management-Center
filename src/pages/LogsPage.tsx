@@ -45,6 +45,7 @@ interface ErrorLogItem {
 // 初始只渲染最近 100 行，滚动到顶部再逐步加载更多（避免一次性渲染过多导致卡顿）
 const INITIAL_DISPLAY_LINES = 100;
 const MAX_BUFFER_LINES = 10000;
+const FETCH_LOG_LIMIT = 2000;
 const LONG_PRESS_MS = 650;
 const LONG_PRESS_MOVE_THRESHOLD = 10;
 
@@ -135,12 +136,13 @@ export function LogsPage() {
         scrollerInstance?.requestScrollToBottom();
       }
 
-      const params =
-        incremental && latestTimestampRef.current > 0 ? { after: latestTimestampRef.current } : {};
+      const params = incremental && latestTimestampRef.current > 0
+        ? { after: latestTimestampRef.current, limit: FETCH_LOG_LIMIT }
+        : { limit: FETCH_LOG_LIMIT };
       const data = await logsApi.fetchLogs(params);
 
       // 更新时间戳
-      if (data['latest-timestamp']) {
+      if (typeof data['latest-timestamp'] === 'number' && data['latest-timestamp'] > 0) {
         latestTimestampRef.current = data['latest-timestamp'];
       }
 

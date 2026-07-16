@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import type { ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Chart as ChartJS,
@@ -19,7 +20,8 @@ import { Button } from '@/components/ui/Button';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { useHeaderRefresh } from '@/hooks/useHeaderRefresh';
 import { useThemeStore } from '@/stores';
-import { usageApi, providersApi } from '@/services/api';
+import { usageApi, providersApi, clientApiKeysApi } from '@/services/api';
+import type { ClientApiKey } from '@/types';
 import { KpiCards } from '@/components/monitor/KpiCards';
 import { ModelDistributionChart } from '@/components/monitor/ModelDistributionChart';
 import { DailyTrendChart } from '@/components/monitor/DailyTrendChart';
@@ -82,9 +84,13 @@ export function MonitorPage() {
   const [usageData, setUsageData] = useState<UsageData | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>(7);
   const [apiFilter, setApiFilter] = useState('');
+  const [apiScope, setApiScope] = useState<'all' | 'global' | 'client'>('all');
+  const [selectedClientKeyName, setSelectedClientKeyName] = useState('');
   const [providerMap, setProviderMap] = useState<Record<string, string>>({});
   const [providerModels, setProviderModels] = useState<Record<string, Set<string>>>({});
   const [providerTypeMap, setProviderTypeMap] = useState<Record<string, string>>({});
+  const [clientApiKeys, setClientApiKeys] = useState<ClientApiKey[]>([]);
+  const [clientApiKeyLabels, setClientApiKeyLabels] = useState<Record<string, string>>({});
 
   // 加载渠道名称映射（支持所有提供商类型）
   const loadProviderMap = useCallback(async () => {
@@ -205,13 +211,22 @@ export function MonitorPage() {
     setError(null);
     try {
       // 并行加载使用数据和渠道映射
-      const [response] = await Promise.all([
+      const [response, fetchedClientApiKeys] = await Promise.all([
         usageApi.getUsage(),
+        clientApiKeysApi.list().catch(() => []),
         loadProviderMap()
       ]);
       // API 返回的数据可能在 response.usage 或直接在 response 中
       const data = response?.usage ?? response;
       setUsageData(data as UsageData);
+      setClientApiKeys(fetchedClientApiKeys);
+      const labels = fetchedClientApiKeys.reduce<Record<string, string>>((acc, item, index) => {
+        if (!item.key) return acc;
+        const fallback = `Client Key ${index + 1}`;
+        acc[item.key] = item.name?.trim() || fallback;
+        return acc;
+      }, {});
+      setClientApiKeyLabels(labels);
     } catch (err) {
       const message = err instanceof Error ? err.message : t('common.unknown_error');
       console.error('Monitor: Error loading data:', err);
@@ -237,16 +252,27 @@ export function MonitorPage() {
 
     const now = new Date();
     const cutoffTime = new Date(now.getTime() - timeRange * 24 * 60 * 60 * 1000);
+    const selectedClientSet = new Set(Object.keys(clientApiKeyLabels));
+    const selectedClientEntry = selectedClientKeyName
+      ? clientApiKeys.find((item) => item.name?.trim() === selectedClientKeyName)
+      : undefined;
 
     const filtered: UsageData = { apis: {} };
 
     Object.entries(usageData.apis).forEach(([apiKey, apiData]) => {
-      // 如果有 API 过滤器，检查是否匹配
+      const isClientKey = selectedClientSet.has(apiKey);
+      if (apiScope === 'global' && isClientKey) {
+        return;
+      }
+      if (apiScope === 'client' && !isClientKey) {
+        return;
+      }
+      if (selectedClientEntry && apiKey !== selectedClientEntry.key) {
+        return;
+      }
       if (apiFilter && !apiKey.toLowerCase().includes(apiFilter.toLowerCase())) {
         return;
       }
-
-      // 检查 apiData 是否有 models 属性
       if (!apiData?.models) {
         return;
       }
@@ -254,7 +280,6 @@ export function MonitorPage() {
       const filteredModels: Record<string, { details: UsageDetail[] }> = {};
 
       Object.entries(apiData.models).forEach(([modelName, modelData]) => {
-        // 检查 modelData 是否有 details 属性
         if (!modelData?.details || !Array.isArray(modelData.details)) {
           return;
         }
@@ -275,11 +300,30 @@ export function MonitorPage() {
     });
 
     return filtered;
-  }, [usageData, timeRange, apiFilter]);
+  }, [usageData, timeRange, apiFilter, apiScope, selectedClientKeyName, clientApiKeyLabels, clientApiKeys]);
 
   // 处理时间范围变化
   const handleTimeRangeChange = (range: TimeRange) => {
     setTimeRange(range);
+  };
+
+  const clientKeyOptions = useMemo(() => {
+    return clientApiKeys
+      .filter((item) => Boolean(item.name?.trim()))
+      .map((item) => ({
+        key: item.key,
+        name: item.name!.trim(),
+        label: item.name!.trim(),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }, [clientApiKeys]);
+
+  const handleApiScopeChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    const nextScope = event.target.value as 'all' | 'global' | 'client';
+    setApiScope(nextScope);
+    if (nextScope !== 'client') {
+      setSelectedClientKeyName('');
+    }
   };
 
   // 处理 API 过滤应用（触发数据刷新）
@@ -333,6 +377,28 @@ export function MonitorPage() {
           </div>
         </div>
         <div className={styles.filterGroup}>
+          <span className={styles.filterLabel}>{t('monitor.api_scope')}</span>
+          <select className={styles.filterSelect} value={apiScope} onChange={handleApiScopeChange}>
+            <option value="all">{t('monitor.api_scope_all')}</option>
+            <option value="global">{t('monitor.api_scope_global')}</option>
+            <option value="client">{t('monitor.api_scope_client')}</option>
+          </select>
+          {apiScope === 'client' && (
+            <select
+              className={styles.filterSelect}
+              value={selectedClientKeyName}
+              onChange={(e) => setSelectedClientKeyName(e.target.value)}
+            >
+              <option value="">{t('monitor.client_api_key_all')}</option>
+              {clientKeyOptions.map((option) => (
+                <option key={option.key} value={option.name}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+        <div className={styles.filterGroup}>
           <span className={styles.filterLabel}>{t('monitor.api_filter')}</span>
           <input
             type="text"
@@ -373,6 +439,9 @@ export function MonitorPage() {
         providerMap={providerMap}
         providerTypeMap={providerTypeMap}
         apiFilter={apiFilter}
+        clientApiKeyLabels={clientApiKeyLabels}
+        apiScope={apiScope}
+        selectedClientKey={selectedClientKeyName}
       />
     </div>
   );

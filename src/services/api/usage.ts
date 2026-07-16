@@ -22,11 +22,34 @@ export interface UsageImportResponse {
   [key: string]: unknown;
 }
 
+export interface UsageQuery {
+  apiKey?: string;
+  clientApiKeyName?: string;
+  from?: string | number;
+  to?: string | number;
+  detailLimit?: number;
+  detailOffset?: number;
+  sort?: 'asc' | 'desc';
+}
+
 export const usageApi = {
   /**
    * 获取使用统计原始数据
    */
-  getUsage: () => apiClient.get<Record<string, unknown>>('/usage', { timeout: USAGE_TIMEOUT_MS }),
+  getUsage: (query?: UsageQuery) => {
+    const params: Record<string, string | number> = {};
+    if (query?.apiKey) params.api_key = query.apiKey;
+    if (query?.clientApiKeyName) params.client_api_key_name = query.clientApiKeyName;
+    if (query?.from !== undefined) params.from = query.from;
+    if (query?.to !== undefined) params.to = query.to;
+    if (query?.detailLimit !== undefined) params.detail_limit = query.detailLimit;
+    if (query?.detailOffset !== undefined) params.detail_offset = query.detailOffset;
+    if (query?.sort) params.sort = query.sort;
+    return apiClient.get<Record<string, unknown>>('/usage', {
+      timeout: USAGE_TIMEOUT_MS,
+      params,
+    });
+  },
 
   /**
    * 导出使用统计快照

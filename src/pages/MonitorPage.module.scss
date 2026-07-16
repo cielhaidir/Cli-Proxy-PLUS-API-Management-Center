@@ -169,6 +169,23 @@
   }
 }
 
+.filterSelect {
+  padding: 8px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: $radius-md;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-size: 13px;
+  min-width: 160px;
+  cursor: pointer;
+
+  &:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  }
+}
+
 // KPI 卡片网格
 .kpiGrid {
   display: grid;

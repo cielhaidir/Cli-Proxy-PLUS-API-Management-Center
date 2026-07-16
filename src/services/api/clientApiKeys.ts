@@ -4,6 +4,7 @@ import type { ClientApiKey, ClientApiKeyPatchPayload, ClientApiKeyPayload, Ledge
 const normalizeClientApiKey = (input: unknown): ClientApiKey => {
   const record = input && typeof input === 'object' ? (input as Record<string, unknown>) : {};
   return {
+    id: typeof record.id === 'string' ? record.id : undefined,
     key: String(record.key ?? ''),
     name: typeof record.name === 'string' ? record.name : undefined,
     enabled: typeof record.enabled === 'boolean' ? record.enabled : undefined,
@@ -19,6 +20,11 @@ const normalizeClientApiKey = (input: unknown): ClientApiKey => {
     notes: typeof record.notes === 'string' ? record.notes : undefined,
     createdAt: typeof record['created-at'] === 'string' ? String(record['created-at']) : typeof record.createdAt === 'string' ? record.createdAt : undefined,
     updatedAt: typeof record['updated-at'] === 'string' ? String(record['updated-at']) : typeof record.updatedAt === 'string' ? record.updatedAt : undefined,
+    filterableName: typeof record['filterable-name'] === 'boolean'
+      ? record['filterable-name']
+      : typeof record.filterableName === 'boolean'
+        ? record.filterableName
+        : undefined,
   };
 };
 

@@ -24,6 +24,9 @@ interface RequestLogsProps {
   providerMap: Record<string, string>;
   providerTypeMap: Record<string, string>;
   apiFilter: string;
+  clientApiKeyLabels: Record<string, string>;
+  apiScope: 'all' | 'global' | 'client';
+  selectedClientKey: string;
 }
 
 interface LogEntry {
@@ -31,6 +34,7 @@ interface LogEntry {
   timestamp: string;
   timestampMs: number;
   apiKey: string;
+  apiLabel: string;
   model: string;
   source: string;
   displayName: string;
@@ -59,7 +63,7 @@ interface PrecomputedStats {
 // 虚拟滚动行高
 const ROW_HEIGHT = 40;
 
-export function RequestLogs({ data, loading: parentLoading, providerMap, providerTypeMap, apiFilter }: RequestLogsProps) {
+export function RequestLogs({ data, loading: parentLoading, providerMap, providerTypeMap, apiFilter, clientApiKeyLabels, apiScope, selectedClientKey }: RequestLogsProps) {
   const { t } = useTranslation();
   const [filterApi, setFilterApi] = useState('');
   const [filterModel, setFilterModel] = useState('');
@@ -118,6 +122,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
 
   // 使用日志独立数据或父组件数据
   const effectiveData = logData || data;
+  const clientKeySet = useMemo(() => new Set(Object.keys(clientApiKeyLabels)), [clientApiKeyLabels]);
   // 只在首次加载且没有数据时显示 loading 状态
   const showLoading = (parentLoading && isFirstLoad && !effectiveData) || (logLoading && !effectiveData);
 
@@ -159,66 +164,48 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
   const fetchLogData = useCallback(async () => {
     setLogLoading(true);
     try {
-      const response = await usageApi.getUsage();
-      const usageData = (response?.usage ?? response) as Record<string, unknown>;
+      const now = new Date();
+      let cutoffStart: Date;
+      let cutoffEnd: Date = new Date(now.getTime());
+      cutoffEnd.setHours(23, 59, 59, 999);
 
-      // 应用时间范围过滤
-      if (usageData?.apis) {
-        const apis = usageData.apis as UsageData['apis'];
-        const now = new Date();
-        let cutoffStart: Date;
-        let cutoffEnd: Date = new Date(now.getTime());
-        cutoffEnd.setHours(23, 59, 59, 999);
-
-        if (timeRange === 'custom' && customRange) {
-          cutoffStart = customRange.start;
-          cutoffEnd = customRange.end;
-        } else if (typeof timeRange === 'number') {
-          cutoffStart = new Date(now.getTime() - timeRange * 24 * 60 * 60 * 1000);
-          cutoffStart.setHours(0, 0, 0, 0);
-        } else {
-          cutoffStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          cutoffStart.setHours(0, 0, 0, 0);
-        }
-
-        const filtered: UsageData = { apis: {} };
-
-        Object.entries(apis).forEach(([apiKey, apiData]) => {
-          // 如果有 API 过滤器，检查是否匹配
-          if (apiFilter && !apiKey.toLowerCase().includes(apiFilter.toLowerCase())) {
-            return;
-          }
-
-          if (!apiData?.models) return;
-
-          const filteredModels: Record<string, { details: UsageData['apis'][string]['models'][string]['details'] }> = {};
-
-          Object.entries(apiData.models).forEach(([modelName, modelData]) => {
-            if (!modelData?.details || !Array.isArray(modelData.details)) return;
-
-            const filteredDetails = modelData.details.filter((detail) => {
-              const timestamp = new Date(detail.timestamp);
-              return timestamp >= cutoffStart && timestamp <= cutoffEnd;
-            });
-
-            if (filteredDetails.length > 0) {
-              filteredModels[modelName] = { details: filteredDetails };
-            }
-          });
-
-          if (Object.keys(filteredModels).length > 0) {
-            filtered.apis[apiKey] = { models: filteredModels };
-          }
-        });
-
-        setLogData(filtered);
+      if (timeRange === 'custom' && customRange) {
+        cutoffStart = customRange.start;
+        cutoffEnd = customRange.end;
+      } else if (typeof timeRange === 'number') {
+        cutoffStart = new Date(now.getTime() - timeRange * 24 * 60 * 60 * 1000);
+        cutoffStart.setHours(0, 0, 0, 0);
+      } else {
+        cutoffStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        cutoffStart.setHours(0, 0, 0, 0);
       }
+
+      const response = await usageApi.getUsage({
+        clientApiKeyName: selectedClientKey || undefined,
+        from: cutoffStart.toISOString(),
+        to: cutoffEnd.toISOString(),
+        detailLimit: 1000,
+        sort: 'desc',
+      });
+      const usageData = (response?.usage ?? response) as UsageData;
+      const clientKeySet = new Set(Object.keys(clientApiKeyLabels));
+      const filtered: UsageData = { apis: {} };
+
+      Object.entries(usageData?.apis ?? {}).forEach(([apiKey, apiData]) => {
+        const isClientKey = clientKeySet.has(apiKey);
+        if (apiScope === 'global' && isClientKey) return;
+        if (apiScope === 'client' && !isClientKey) return;
+        if (apiFilter && !apiKey.toLowerCase().includes(apiFilter.toLowerCase())) return;
+        filtered.apis[apiKey] = apiData;
+      });
+
+      setLogData(filtered);
     } catch (err) {
       console.error('日志刷新失败：', err);
     } finally {
       setLogLoading(false);
     }
-  }, [timeRange, customRange, apiFilter]);
+  }, [timeRange, customRange, apiFilter, apiScope, selectedClientKey, clientApiKeyLabels]);
 
   // 同步 fetchLogData 到 ref，确保定时器始终调用最新版本
   useEffect(() => {
@@ -263,11 +250,10 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
     };
   }, [autoRefresh]);
 
-  // 时间范围变化时立即刷新数据
+  // 条件变化时立即刷新数据
   useEffect(() => {
     fetchLogData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeRange, customRange]);
+  }, [fetchLogData]);
 
   // 获取倒计时显示文本
   const getCountdownText = () => {
@@ -304,6 +290,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
             timestamp: detail.timestamp,
             timestampMs,
             apiKey,
+            apiLabel: clientApiKeyLabels[apiKey] || maskSecret(apiKey),
             model: modelName,
             source,
             displayName,
@@ -322,7 +309,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
 
     // 按时间倒序排序
     return entries.sort((a, b) => b.timestampMs - a.timestampMs);
-  }, [effectiveData, providerMap, providerTypeMap]);
+  }, [effectiveData, providerMap, providerTypeMap, clientApiKeyLabels]);
 
   // 预计算所有条目的统计数据（一次性计算，避免渲染时重复计算）
   const precomputedStats = useMemo(() => {
@@ -450,7 +437,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
           {authDisplayName}
         </td>
         <td title={entry.apiKey}>
-          {maskSecret(entry.apiKey)}
+          {clientKeySet.has(entry.apiKey) ? entry.apiLabel : maskSecret(entry.apiKey)}
         </td>
         <td>{entry.providerType}</td>
         <td title={entry.model}>
@@ -540,7 +527,7 @@ export function RequestLogs({ data, loading: parentLoading, providerMap, provide
             <option value="">{t('monitor.logs.all_apis')}</option>
             {apis.map((api) => (
               <option key={api} value={api}>
-                {maskSecret(api)}
+                {clientApiKeyLabels[api] || maskSecret(api)}
               </option>
             ))}
           </select>

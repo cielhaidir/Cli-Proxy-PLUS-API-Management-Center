@@ -7,6 +7,7 @@ import { LOGS_TIMEOUT_MS } from '@/utils/constants';
 
 export interface LogsQuery {
   after?: number;
+  limit?: number;
 }
 
 export interface LogsResponse {
