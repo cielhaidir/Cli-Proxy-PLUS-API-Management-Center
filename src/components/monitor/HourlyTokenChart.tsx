@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Chart } from 'react-chartjs-2';
 import type { UsageData } from '@/pages/MonitorPage';
+import { getCachedTokens, getInputTokens, getOutputTokens, getReasoningTokens, getTotalTokens } from '@/utils/monitor';
 import styles from '@/pages/MonitorPage.module.scss';
 
 interface HourlyTokenChartProps {
@@ -21,12 +22,9 @@ export function HourlyTokenChart({ data, loading, isDark }: HourlyTokenChartProp
     if (!data?.apis) return { hours: [], totalTokens: [], inputTokens: [], outputTokens: [], reasoningTokens: [], cachedTokens: [] };
 
     const now = new Date();
-    let cutoffTime: Date;
-    let hoursCount: number;
-
-    cutoffTime = new Date(now.getTime() - hourRange * 60 * 60 * 1000);
+    const cutoffTime = new Date(now.getTime() - hourRange * 60 * 60 * 1000);
     cutoffTime.setMinutes(0, 0, 0);
-    hoursCount = hourRange + 1;
+    const hoursCount = hourRange + 1;
 
     // 生成所有小时的时间点
     const allHours: string[] = [];
@@ -62,11 +60,11 @@ export function HourlyTokenChart({ data, loading, isDark }: HourlyTokenChartProp
           if (!hourlyStats[hourKey]) {
             hourlyStats[hourKey] = { total: 0, input: 0, output: 0, reasoning: 0, cached: 0 };
           }
-          hourlyStats[hourKey].total += detail.tokens.total_tokens || 0;
-          hourlyStats[hourKey].input += detail.tokens.input_tokens || 0;
-          hourlyStats[hourKey].output += detail.tokens.output_tokens || 0;
-          hourlyStats[hourKey].reasoning += detail.tokens.reasoning_tokens || 0;
-          hourlyStats[hourKey].cached += detail.tokens.cached_tokens || 0;
+          hourlyStats[hourKey].total += getTotalTokens(detail);
+          hourlyStats[hourKey].input += getInputTokens(detail);
+          hourlyStats[hourKey].output += getOutputTokens(detail);
+          hourlyStats[hourKey].reasoning += getReasoningTokens(detail);
+          hourlyStats[hourKey].cached += getCachedTokens(detail);
         });
       });
     });
@@ -126,6 +124,34 @@ export function HourlyTokenChart({ data, loading, isDark }: HourlyTokenChartProp
           order: 0,
           pointRadius: 3,
           pointBackgroundColor: '#f97316',
+        },
+        {
+          type: 'line' as const,
+          label: t('monitor.hourly_token.cached'),
+          data: hourlyData.cachedTokens,
+          borderColor: '#8b5cf6',
+          backgroundColor: '#8b5cf6',
+          borderWidth: 2,
+          tension: 0.35,
+          yAxisID: 'y',
+          order: 0,
+          pointRadius: 2,
+          pointBackgroundColor: '#8b5cf6',
+          hidden: hourlyData.cachedTokens.every((value) => value === 0),
+        },
+        {
+          type: 'line' as const,
+          label: t('monitor.hourly_token.reasoning'),
+          data: hourlyData.reasoningTokens,
+          borderColor: '#14b8a6',
+          backgroundColor: '#14b8a6',
+          borderWidth: 2,
+          tension: 0.35,
+          yAxisID: 'y',
+          order: 0,
+          pointRadius: 2,
+          pointBackgroundColor: '#14b8a6',
+          hidden: hourlyData.reasoningTokens.every((value) => value === 0),
         },
         {
           type: 'bar' as const,

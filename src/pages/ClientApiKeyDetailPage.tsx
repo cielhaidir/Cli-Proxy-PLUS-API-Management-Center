@@ -109,8 +109,8 @@ export function ClientApiKeyDetailPage() {
           <div className={styles.subtitle}>{decodedKey}</div>
         </div>
         <div className={styles.actions}>
-          <Link to="/client-api-keys"><Button variant="secondary">Back</Button></Link>
-          <Button variant="secondary" onClick={() => void load(page)} disabled={loading}>Refresh</Button>
+          <Link to="/client-api-keys"><Button className={styles.actionButton} variant="secondary">Back</Button></Link>
+          <Button className={styles.actionButton} variant="secondary" onClick={() => void load(page)} disabled={loading}>Refresh</Button>
         </div>
       </div>
 
@@ -185,7 +185,7 @@ export function ClientApiKeyDetailPage() {
                 </tbody>
               </table>
             </div>
-            <div className="pagination">
+            <div className={styles.paginationRow}>
               <Button variant="secondary" size="sm" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Prev</Button>
               <span className={styles.muted}>Page {pagination.page} / {pagination.total_pages}</span>
               <Button variant="secondary" size="sm" onClick={() => setPage((current) => Math.min(pagination.total_pages, current + 1))} disabled={page >= pagination.total_pages}>Next</Button>

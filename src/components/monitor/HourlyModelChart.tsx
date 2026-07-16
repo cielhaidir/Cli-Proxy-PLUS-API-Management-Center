@@ -31,12 +31,9 @@ export function HourlyModelChart({ data, loading, isDark }: HourlyModelChartProp
     if (!data?.apis) return { hours: [], models: [], modelData: {} as Record<string, number[]>, successRates: [] };
 
     const now = new Date();
-    let cutoffTime: Date;
-    let hoursCount: number;
-
-    cutoffTime = new Date(now.getTime() - hourRange * 60 * 60 * 1000);
+    const cutoffTime = new Date(now.getTime() - hourRange * 60 * 60 * 1000);
     cutoffTime.setMinutes(0, 0, 0);
-    hoursCount = hourRange + 1;
+    const hoursCount = hourRange + 1;
 
     // 生成所有小时的时间点
     const allHours: string[] = [];

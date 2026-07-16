@@ -50,7 +50,7 @@ export function BillingOverviewPage() {
           <div className={styles.subtitle}>See balances, spend, top-ups, and keys that need attention.</div>
         </div>
         <div className={styles.actions}>
-          <Button variant="secondary" onClick={() => void load()} disabled={loading}>Refresh</Button>
+          <Button className={styles.actionButton} variant="secondary" onClick={() => void load()} disabled={loading}>Refresh</Button>
         </div>
       </div>
 

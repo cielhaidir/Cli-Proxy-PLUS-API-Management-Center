@@ -156,8 +156,8 @@ export function ModelPricingPage() {
           <div className={styles.subtitle}>Configure per-model billing rates used by backend debiting.</div>
         </div>
         <div className={styles.actions}>
-          <Button variant="secondary" onClick={() => void load()} disabled={loading || saving}>Refresh</Button>
-          <Button onClick={openCreate}>Create Pricing</Button>
+          <Button className={styles.actionButton} variant="secondary" onClick={() => void load()} disabled={loading || saving}>Refresh</Button>
+          <Button className={styles.actionButton} onClick={openCreate}>Create Pricing</Button>
         </div>
       </div>
 
@@ -188,7 +188,7 @@ export function ModelPricingPage() {
                     <td>{formatUsdMinorUnits(item.cachedInputPrice, { maximumFractionDigits: 4 })}</td>
                     <td>{formatUsdMinorUnits(item.requestPrice, { maximumFractionDigits: 4 })}</td>
                     <td><span className={`${styles.pill} ${item.enabled === false ? styles.pillDanger : styles.pillSuccess}`}>{item.enabled === false ? 'Disabled' : 'Enabled'}</span></td>
-                    <td><div className={styles.rowActions}><Button variant="secondary" size="sm" onClick={() => openEdit(item)}>Edit</Button><Button variant="danger" size="sm" onClick={() => removeItem(item)}>Delete</Button></div></td>
+                    <td><div className={styles.rowActions}><Button className={styles.actionButton} variant="secondary" size="sm" onClick={() => openEdit(item)}>Edit</Button><Button className={styles.actionButton} variant="danger" size="sm" onClick={() => removeItem(item)}>Delete</Button></div></td>
                   </tr>
                 ))}
               </tbody>
@@ -201,7 +201,7 @@ export function ModelPricingPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title={editing ? 'Edit Model Pricing' : 'Create Model Pricing'}
-        footer={<><Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submit()} loading={saving}>Save</Button></>}
+        footer={<div className={styles.modalFooter}><Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submit()} loading={saving}>Save</Button></div>}
         width={760}
       >
         <div className={styles.formGrid}>

@@ -61,6 +61,7 @@ export interface UsageDetail {
     output_tokens: number;
     reasoning_tokens: number;
     cached_tokens: number;
+    cache_tokens?: number;
     total_tokens: number;
   };
 }
@@ -407,7 +408,7 @@ export function MonitorPage() {
             value={apiFilter}
             onChange={(e) => setApiFilter(e.target.value)}
           />
-          <Button variant="secondary" size="sm" onClick={handleApiFilterApply}>
+          <Button variant="secondary" size="sm" fullWidth={false} onClick={handleApiFilterApply}>
             {t('monitor.apply')}
           </Button>
         </div>

@@ -2,7 +2,8 @@
  * 监控中心公共工具函数
  */
 
-import type { UsageData } from '@/pages/MonitorPage';
+import { extractTotalTokens } from '@/utils/usage';
+import type { UsageData, UsageDetail } from '@/pages/MonitorPage';
 
 /**
  * 日期范围接口
@@ -212,6 +213,29 @@ export type TimeRangeValue = number | 'custom';
  * @param customRange 自定义日期范围
  * @returns 过滤后的数据
  */
+export function getInputTokens(detail: Pick<UsageDetail, 'tokens'>): number {
+  return Math.max(Number(detail.tokens?.input_tokens ?? 0), 0);
+}
+
+export function getOutputTokens(detail: Pick<UsageDetail, 'tokens'>): number {
+  return Math.max(Number(detail.tokens?.output_tokens ?? 0), 0);
+}
+
+export function getReasoningTokens(detail: Pick<UsageDetail, 'tokens'>): number {
+  return Math.max(Number(detail.tokens?.reasoning_tokens ?? 0), 0);
+}
+
+export function getCachedTokens(detail: Pick<UsageDetail, 'tokens'>): number {
+  return Math.max(
+    Number(detail.tokens?.cached_tokens ?? 0),
+    Number(detail.tokens?.cache_tokens ?? 0)
+  );
+}
+
+export function getTotalTokens(detail: Pick<UsageDetail, 'tokens'>): number {
+  return Math.max(extractTotalTokens(detail), 0);
+}
+
 export function filterDataByTimeRange(
   data: UsageData | null,
   timeRange: TimeRangeValue,

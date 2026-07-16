@@ -1,6 +1,9 @@
+@use '../styles/mixins' as *;
+
 .container {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .header {
@@ -69,6 +72,7 @@
 .tableWrap {
   overflow-x: auto;
   width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table {
@@ -130,6 +134,26 @@
 
 .rowActions {
   display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.actionButton {
+  flex: 0 0 auto;
+}
+
+.modalFooter {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.paginationRow {
+  display: flex;
+  justify-content: center;
+  align-items: center;
   gap: 8px;
   flex-wrap: wrap;
 }
@@ -205,16 +229,58 @@
   }
 }
 
-@media (max-width: 768px) {
-  .pageTitle {
-    font-size: 1.5rem;
+@include mobile {
+  .header {
+    align-items: stretch;
+  }
+
+  .actions,
+  .toolbar {
+    width: 100%;
+  }
+
+  .actions > :global(.btn),
+  .actions > a,
+  .actions > a > :global(.btn) {
+    flex: 1 1 calc(50% - 4px);
+  }
+
+  .searchWrap {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .statsGrid {
+    grid-template-columns: 1fr;
   }
 
   .table {
-    min-width: 720px;
+    min-width: 680px;
   }
 
   .activityTable {
-    min-width: 900px;
+    min-width: 980px;
+  }
+
+  .rowActions {
+    min-width: 180px;
+  }
+
+  .modalFooter {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+
+  .modalFooter > :global(.btn) {
+    width: 100%;
+  }
+
+  .paginationRow {
+    justify-content: stretch;
+  }
+
+  .paginationRow > :global(.btn) {
+    flex: 1 1 0;
   }
 }

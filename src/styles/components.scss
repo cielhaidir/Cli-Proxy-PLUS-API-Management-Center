@@ -399,6 +399,11 @@ textarea {
   z-index: $z-modal;
   padding: $spacing-lg;
 
+  @media (max-width: 768px) {
+    padding: $spacing-sm;
+    align-items: flex-end;
+  }
+
   &.modal-overlay-entering {
     animation: modal-overlay-fade-in 0.25s ease-out forwards;
   }
@@ -432,10 +437,18 @@ textarea {
   border: 1px solid var(--border-color);
   box-shadow: $shadow-lg;
   max-height: 90vh;
+  max-width: min(100%, calc(100vw - 32px));
   overflow: hidden;
   display: flex;
   flex-direction: column;
   position: relative;
+
+  @media (max-width: 768px) {
+    width: 100% !important;
+    max-width: 100%;
+    max-height: min(92vh, 100dvh - 16px);
+    border-radius: $radius-lg $radius-lg 0 0;
+  }
   // 关闭按钮中心位置: right 12px + 16px = 28px, top 12px + 16px = 28px
   transform-origin: calc(100% - 28px) 28px;
 
@@ -521,6 +534,10 @@ textarea {
   padding: $spacing-md $spacing-lg;
   border-bottom: 1px solid var(--border-color);
 
+  @media (max-width: 768px) {
+    padding: $spacing-md;
+  }
+
   .modal-title {
     font-weight: 700;
     font-size: 18px;
@@ -532,6 +549,11 @@ textarea {
   padding: $spacing-lg;
   overflow: auto;
   max-height: 65vh;
+
+  @media (max-width: 768px) {
+    padding: $spacing-md;
+    max-height: min(72vh, 100dvh - 140px);
+  }
 }
 
 .modal-footer {
@@ -541,6 +563,11 @@ textarea {
   justify-content: flex-end;
   gap: $spacing-sm;
   background: var(--bg-primary);
+
+  @media (max-width: 768px) {
+    padding: $spacing-md;
+    flex-wrap: wrap;
+  }
 }
 
 .request-log-modal {

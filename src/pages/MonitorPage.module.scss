@@ -103,6 +103,11 @@
   border: 1px solid var(--border-color);
   border-radius: $radius-lg;
   align-items: center;
+
+  @include mobile {
+    gap: 12px;
+    padding: 14px;
+  }
 }
 
 .filterGroup {
@@ -110,6 +115,11 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  min-width: 0;
+
+  @include mobile {
+    width: 100%;
+  }
 }
 
 .filterLabel {
@@ -125,6 +135,12 @@
   background: var(--bg-tertiary);
   border-radius: $radius-full;
   padding: 4px;
+
+  @include mobile {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
 }
 
 .timeButton {
@@ -158,6 +174,12 @@
   font-size: 13px;
   min-width: 160px;
 
+  @include mobile {
+    min-width: 0;
+    flex: 1 1 100%;
+    width: 100%;
+  }
+
   &::placeholder {
     color: var(--text-tertiary);
   }
@@ -178,6 +200,11 @@
   font-size: 13px;
   min-width: 160px;
   cursor: pointer;
+
+  @include mobile {
+    min-width: 0;
+    flex: 1 1 calc(50% - 5px);
+  }
 
   &:focus {
     outline: none;
@@ -603,7 +630,7 @@
 // 虚拟滚动表格固定列宽
 .virtualTable {
   table-layout: fixed;
-  min-width: 1280px;
+  min-width: 1480px;
 
   th, td {
     overflow: hidden;
@@ -616,29 +643,33 @@
   // API
   th:nth-child(2), td:nth-child(2) { width: 110px; }
   // 请求类型
-  th:nth-child(3), td:nth-child(3) { width: 65px; }
+  th:nth-child(3), td:nth-child(3) { width: 80px; }
   // 模型
   th:nth-child(4), td:nth-child(4) { width: 160px; }
   // 请求渠道
   th:nth-child(5), td:nth-child(5) { width: 140px; }
   // 状态
-  th:nth-child(6), td:nth-child(6) { width: 60px; }
+  th:nth-child(6), td:nth-child(6) { width: 70px; }
   // 最近请求状态
   th:nth-child(7), td:nth-child(7) { width: 100px; }
   // 成功率
-  th:nth-child(8), td:nth-child(8) { width: 70px; }
+  th:nth-child(8), td:nth-child(8) { width: 80px; }
   // 请求数
-  th:nth-child(9), td:nth-child(9) { width: 70px; }
+  th:nth-child(9), td:nth-child(9) { width: 80px; }
   // 输入
-  th:nth-child(10), td:nth-child(10) { width: 60px; }
+  th:nth-child(10), td:nth-child(10) { width: 80px; }
   // 输出
-  th:nth-child(11), td:nth-child(11) { width: 60px; }
+  th:nth-child(11), td:nth-child(11) { width: 80px; }
+  // 缓存
+  th:nth-child(12), td:nth-child(12) { width: 80px; }
+  // 推理
+  th:nth-child(13), td:nth-child(13) { width: 90px; }
   // 总 Token
-  th:nth-child(12), td:nth-child(12) { width: 70px; }
+  th:nth-child(14), td:nth-child(14) { width: 90px; }
   // 时间
-  th:nth-child(13), td:nth-child(13) { width: 150px; }
+  th:nth-child(15), td:nth-child(15) { width: 150px; }
   // 操作
-  th:nth-child(14), td:nth-child(14) { width: 60px; }
+  th:nth-child(16), td:nth-child(16) { width: 70px; }
 }
 
 .table {

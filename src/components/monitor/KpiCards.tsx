@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { UsageData } from '@/pages/MonitorPage';
+import { getCachedTokens, getInputTokens, getOutputTokens, getReasoningTokens, getTotalTokens } from '@/utils/monitor';
 import styles from '@/pages/MonitorPage.module.scss';
 
 interface KpiCardsProps {
@@ -67,11 +68,11 @@ export function KpiCards({ data, loading, timeRange }: KpiCardsProps) {
             successRequests++;
           }
 
-          totalTokens += detail.tokens.total_tokens || 0;
-          inputTokens += detail.tokens.input_tokens || 0;
-          outputTokens += detail.tokens.output_tokens || 0;
-          reasoningTokens += detail.tokens.reasoning_tokens || 0;
-          cachedTokens += detail.tokens.cached_tokens || 0;
+          totalTokens += getTotalTokens(detail);
+          inputTokens += getInputTokens(detail);
+          outputTokens += getOutputTokens(detail);
+          reasoningTokens += getReasoningTokens(detail);
+          cachedTokens += getCachedTokens(detail);
 
           timestamps.push(new Date(detail.timestamp).getTime());
         });
@@ -152,6 +153,10 @@ export function KpiCards({ data, loading, timeRange }: KpiCardsProps) {
         <div className={styles.kpiMeta}>
           <span>{t('monitor.kpi.input')}: {loading ? '--' : formatNumber(stats.inputTokens)}</span>
           <span>{t('monitor.kpi.output')}: {loading ? '--' : formatNumber(stats.outputTokens)}</span>
+          <span>{t('monitor.kpi.cached')}: {loading ? '--' : formatNumber(stats.cachedTokens)}</span>
+          {stats.reasoningTokens > 0 && (
+            <span>{t('monitor.kpi.reasoning')}: {loading ? '--' : formatNumber(stats.reasoningTokens)}</span>
+          )}
         </div>
       </div>
 

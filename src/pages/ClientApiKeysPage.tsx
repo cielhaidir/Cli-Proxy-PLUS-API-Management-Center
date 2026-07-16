@@ -253,8 +253,8 @@ export function ClientApiKeysPage() {
           <div className={styles.subtitle}>Manage client access, model allow-lists, and balances.</div>
         </div>
         <div className={styles.actions}>
-          <Button variant="secondary" onClick={() => void load()} disabled={loading || saving}>Refresh</Button>
-          <Button onClick={openCreate}>Create Key</Button>
+          <Button className={styles.actionButton} variant="secondary" onClick={() => void load()} disabled={loading || saving}>Refresh</Button>
+          <Button className={styles.actionButton} onClick={openCreate}>Create Key</Button>
         </div>
       </div>
 
@@ -294,12 +294,12 @@ export function ClientApiKeysPage() {
                     <td>{item.allowedModels?.length ?? 0}</td>
                     <td>
                       <div className={styles.rowActions}>
-                        <Button variant="secondary" size="sm" onClick={() => openEdit(item)}>Edit</Button>
-                        <Button variant="secondary" size="sm" onClick={() => openBalanceEdit(item)}>Edit Balance</Button>
-                        <Button variant="secondary" size="sm" onClick={() => openTopup(item)}>Top Up</Button>
-                        <Button variant="ghost" size="sm" onClick={() => resetTotalSpent(item)}>Reset Spent</Button>
-                        <Link to={`/client-api-keys/${encodeURIComponent(item.key)}`}><Button variant="ghost" size="sm">Detail</Button></Link>
-                        <Button variant="danger" size="sm" onClick={() => removeItem(item)}>Delete</Button>
+                        <Button className={styles.actionButton} variant="secondary" size="sm" onClick={() => openEdit(item)}>Edit</Button>
+                        <Button className={styles.actionButton} variant="secondary" size="sm" onClick={() => openBalanceEdit(item)}>Edit Balance</Button>
+                        <Button className={styles.actionButton} variant="secondary" size="sm" onClick={() => openTopup(item)}>Top Up</Button>
+                        <Button className={styles.actionButton} variant="ghost" size="sm" onClick={() => resetTotalSpent(item)}>Reset Spent</Button>
+                        <Link to={`/client-api-keys/${encodeURIComponent(item.key)}`}><Button className={styles.actionButton} variant="ghost" size="sm">Detail</Button></Link>
+                        <Button className={styles.actionButton} variant="danger" size="sm" onClick={() => removeItem(item)}>Delete</Button>
                       </div>
                     </td>
                   </tr>
@@ -314,7 +314,7 @@ export function ClientApiKeysPage() {
         open={modalOpen}
         onClose={() => setModalOpen(false)}
         title={editing ? 'Edit Client API Key' : 'Create Client API Key'}
-        footer={<><Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submitForm()} loading={saving}>Save</Button></>}
+        footer={<div className={styles.modalFooter}><Button variant="secondary" onClick={() => setModalOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submitForm()} loading={saving}>Save</Button></div>}
         width={760}
       >
         <div className={styles.formGrid}>
@@ -345,7 +345,7 @@ export function ClientApiKeysPage() {
         open={topupOpen}
         onClose={() => setTopupOpen(false)}
         title={`Top Up ${topupTarget?.name || topupTarget?.key || ''}`}
-        footer={<><Button variant="secondary" onClick={() => setTopupOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submitTopup()} loading={saving}>Apply</Button></>}
+        footer={<div className={styles.modalFooter}><Button variant="secondary" onClick={() => setTopupOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submitTopup()} loading={saving}>Apply</Button></div>}
       >
         <Input label="Amount ($)" value={topupAmount} onChange={(event) => setTopupAmount(event.target.value)} hint="Contoh: 25,00 untuk top-up $25.00" />
         <Input label="Note" value={topupNote} onChange={(event) => setTopupNote(event.target.value)} />
@@ -355,7 +355,7 @@ export function ClientApiKeysPage() {
         open={balanceOpen}
         onClose={() => setBalanceOpen(false)}
         title={`Edit Balance ${balanceTarget?.name || balanceTarget?.key || ''}`}
-        footer={<><Button variant="secondary" onClick={() => setBalanceOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submitBalanceEdit()} loading={saving}>Save</Button></>}
+        footer={<div className={styles.modalFooter}><Button variant="secondary" onClick={() => setBalanceOpen(false)} disabled={saving}>Cancel</Button><Button onClick={() => void submitBalanceEdit()} loading={saving}>Save</Button></div>}
       >
         <Input label="Balance ($)" value={balanceAmount} onChange={(event) => setBalanceAmount(event.target.value)} hint="Contoh: 100,00 untuk balance $100.00" />
       </Modal>

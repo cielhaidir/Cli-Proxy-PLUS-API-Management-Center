@@ -1608,6 +1608,8 @@
       "header_count": "Requests",
       "header_input": "Input",
       "header_output": "Output",
+      "header_cached": "Cached",
+      "header_reasoning": "Reasoning",
       "header_total": "Total Tokens",
       "header_time": "Time",
       "header_actions": "Actions",

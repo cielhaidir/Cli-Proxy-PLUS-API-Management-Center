@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Doughnut } from 'react-chartjs-2';
 import type { UsageData } from '@/pages/MonitorPage';
+import { getTotalTokens } from '@/utils/monitor';
 import styles from '@/pages/MonitorPage.module.scss';
 
 interface ModelDistributionChartProps {
@@ -48,7 +49,7 @@ export function ModelDistributionChart({ data, loading, isDark, timeRange }: Mod
         }
         modelData.details.forEach((detail) => {
           modelStats[modelName].requests++;
-          modelStats[modelName].tokens += detail.tokens.total_tokens || 0;
+          modelStats[modelName].tokens += getTotalTokens(detail);
         });
       });
     });

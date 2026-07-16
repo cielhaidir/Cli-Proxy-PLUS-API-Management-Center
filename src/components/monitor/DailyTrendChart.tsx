@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Chart } from 'react-chartjs-2';
 import type { UsageData } from '@/pages/MonitorPage';
+import { getCachedTokens, getInputTokens, getOutputTokens, getReasoningTokens } from '@/utils/monitor';
 import styles from '@/pages/MonitorPage.module.scss';
 
 interface DailyTrendChartProps {
@@ -70,10 +71,10 @@ export function DailyTrendChart({ data, loading, isDark, timeRange }: DailyTrend
           } else {
             dailyStats[date].successRequests++;
             // 只统计成功请求的 Token
-            dailyStats[date].inputTokens += detail.tokens.input_tokens || 0;
-            dailyStats[date].outputTokens += detail.tokens.output_tokens || 0;
-            dailyStats[date].reasoningTokens += detail.tokens.reasoning_tokens || 0;
-            dailyStats[date].cachedTokens += detail.tokens.cached_tokens || 0;
+            dailyStats[date].inputTokens += getInputTokens(detail);
+            dailyStats[date].outputTokens += getOutputTokens(detail);
+            dailyStats[date].reasoningTokens += getReasoningTokens(detail);
+            dailyStats[date].cachedTokens += getCachedTokens(detail);
           }
         });
       });
@@ -132,6 +133,32 @@ export function DailyTrendChart({ data, loading, isDark, timeRange }: DailyTrend
           yAxisID: 'y',
           order: 1,
           stack: 'tokens',
+        },
+        {
+          type: 'bar' as const,
+          label: t('monitor.trend.cached_tokens'),
+          data: dailyData.map((item) => item.cachedTokens / 1000),
+          backgroundColor: 'rgba(139, 92, 246, 0.7)',
+          borderColor: 'rgba(139, 92, 246, 0.7)',
+          borderWidth: 1,
+          borderRadius: 4,
+          yAxisID: 'y',
+          order: 1,
+          stack: 'tokens',
+          hidden: dailyData.every((item) => item.cachedTokens === 0),
+        },
+        {
+          type: 'bar' as const,
+          label: t('monitor.trend.reasoning_tokens'),
+          data: dailyData.map((item) => item.reasoningTokens / 1000),
+          backgroundColor: 'rgba(20, 184, 166, 0.7)',
+          borderColor: 'rgba(20, 184, 166, 0.7)',
+          borderWidth: 1,
+          borderRadius: 4,
+          yAxisID: 'y',
+          order: 1,
+          stack: 'tokens',
+          hidden: dailyData.every((item) => item.reasoningTokens === 0),
         },
       ],
     };

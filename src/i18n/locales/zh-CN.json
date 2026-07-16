@@ -1608,6 +1608,8 @@
       "header_count": "请求数",
       "header_input": "输入",
       "header_output": "输出",
+      "header_cached": "缓存",
+      "header_reasoning": "思考",
       "header_total": "总 Token",
       "header_time": "时间",
       "header_actions": "操作",
