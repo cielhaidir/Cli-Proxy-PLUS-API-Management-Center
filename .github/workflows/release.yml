@@ -52,10 +52,17 @@ jobs:
           set -euo pipefail
           current_tag="${RELEASE_VERSION}"
           previous_tag="$(git tag --list 'v*' --sort=-v:refname | grep -v "^${current_tag}$" | head -n 1 || true)"
-          if [ -n "${previous_tag}" ]; then
-            range="${previous_tag}..${current_tag}"
+          # A manual dispatch can publish a version that is not yet a git tag.
+          # Use the checked-out commit as the release endpoint in that case.
+          if git rev-parse --verify --quiet "${current_tag}^{commit}" >/dev/null; then
+            release_ref="${current_tag}"
           else
-            range="${current_tag}"
+            release_ref="${GITHUB_SHA}"
+          fi
+          if [ -n "${previous_tag}" ]; then
+            range="${previous_tag}..${release_ref}"
+          else
+            range="${release_ref}"
           fi
 
           : > release-notes.md
