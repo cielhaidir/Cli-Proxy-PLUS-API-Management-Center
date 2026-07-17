@@ -213,8 +213,14 @@ export type TimeRangeValue = number | 'custom';
  * @param customRange 自定义日期范围
  * @returns 过滤后的数据
  */
+export function calculateNetInputTokens(inputTokens: number, cachedTokens: number): number {
+  return Math.max(inputTokens - cachedTokens, 0);
+}
+
 export function getInputTokens(detail: Pick<UsageDetail, 'tokens'>): number {
-  return Math.max(Number(detail.tokens?.input_tokens ?? 0), 0);
+  const inputTokens = Math.max(Number(detail.tokens?.input_tokens ?? 0), 0);
+  const cachedTokens = getCachedTokens(detail);
+  return calculateNetInputTokens(inputTokens, cachedTokens);
 }
 
 export function getOutputTokens(detail: Pick<UsageDetail, 'tokens'>): number {
